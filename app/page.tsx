@@ -1,262 +1,239 @@
+import Link from "next/link";
 import {
-  getDashboardData,
-  type IssueRow,
-  type PullRequestRow,
-  type RepositoryRow,
-  type WebhookEventRow,
-} from "../lib/dashboard/data";
+  ArrowDown,
+  ArrowRight,
+  ArrowUpRight,
+  BookOpen,
+  CircleDot,
+  CodeXml as Github,
+  GitMerge,
+  GitPullRequest,
+  Radio,
+} from "lucide-react";
+import { Brand } from "./ui/brand";
 
-export const dynamic = "force-dynamic";
-
-export default async function Home() {
-  const data = await getDashboardData();
-  const latestEvent = data.recentEvents.data[0];
-
+export default function Home() {
   return (
-    <main className="shell">
-      <header className="topbar">
-        <div className="brandRow">
-          <img src="/plinger-icon.png" alt="" className="icon" />
+    <main className="landing">
+      <nav className="landing-nav" aria-label="Main navigation">
+        <Brand />
+        <div className="landing-nav-links">
+          <a href="#workflow">The workflow</a>
+          <a
+            href="https://github.com/apps/plinger"
+            target="_blank"
+            rel="noreferrer"
+          >
+            GitHub <ArrowUpRight size={14} />
+          </a>
+        </div>
+        <Link className="button button-light" href="/dashboard">
+          Open dashboard <ArrowRight size={16} />
+        </Link>
+      </nav>
+      <section className="hero">
+        <div className="hero-brand-image" aria-hidden="true">
+          <img src="/plinger-icon.png" alt="" width={112} height={112} />
+        </div>
+        <p className="hero-kicker">
+          <span className="status-dot" /> A little signal. A lot more clarity.
+        </p>
+        <h1>
+          Plinger<span className="brand-period">.</span>
+        </h1>
+        <p className="hero-title">Your repositories. One clear picture.</p>
+        <p className="hero-description">
+          Keep up with the issues, pull requests, and pushes that move your work
+          forward. All together, without the tab hopping.
+        </p>
+        <div className="hero-actions">
+          <Link className="button button-light" href="/dashboard">
+            Open your dashboard <ArrowRight size={17} />
+          </Link>
+          <a
+            className="button button-dark-outline"
+            href="https://github.com/apps/plinger/installations/new"
+          >
+            <Github size={17} /> Connect GitHub
+          </a>
+        </div>
+        <a className="hero-scroll" href="#workflow">
+          A closer look <ArrowDown size={14} />
+        </a>
+      </section>
+      <section
+        className="product-section"
+        id="workflow"
+        aria-labelledby="workflow-title"
+      >
+        <div className="section-heading">
           <div>
-            <p className="eyebrow">Live GitHub signal board</p>
-            <h1>Plinger</h1>
+            <p className="overline">LESS CHECKING. MORE BUILDING.</p>
+            <h2 id="workflow-title">Pick up exactly where work stands.</h2>
+          </div>
+          <span className="preview-label">
+            <Radio size={14} /> Dashboard preview · Example activity
+          </span>
+        </div>
+        <div className="product-preview">
+          <aside className="preview-sidebar">
+            <Brand />
+            <span className="preview-nav-active">
+              <Radio size={16} /> Overview
+            </span>
+            <span>
+              <BookOpen size={16} /> Repositories
+            </span>
+            <span>
+              <CircleDot size={16} /> Issues <b>3</b>
+            </span>
+            <span>
+              <GitPullRequest size={16} /> Pull requests <b>2</b>
+            </span>
+          </aside>
+          <div className="preview-main">
+            <div className="preview-top">
+              <span>
+                Workspace <span className="muted"> / Overview</span>
+              </span>
+              <span className="badge green">
+                <span className="status-dot" /> Connected
+              </span>
+            </div>
+            <div className="preview-intro">
+              <h3>A good day to ship.</h3>
+              <span className="muted">
+                Here is what is happening across your repositories.
+              </span>
+            </div>
+            <div className="preview-stats">
+              <div>
+                <BookOpen size={17} />
+                <span>Repositories</span>
+                <strong>4</strong>
+              </div>
+              <div>
+                <CircleDot size={17} />
+                <span>Open issues</span>
+                <strong>3</strong>
+              </div>
+              <div>
+                <GitPullRequest size={17} />
+                <span>Open pull requests</span>
+                <strong>2</strong>
+              </div>
+              <div>
+                <GitMerge size={17} className="purple-text" />
+                <span>Merged</span>
+                <strong>12</strong>
+              </div>
+            </div>
+            <div className="preview-feed">
+              <h4>
+                Recent activity{" "}
+                <span className="muted">Across your workspace</span>
+              </h4>
+              <PreviewEvent
+                type="merged"
+                title="Simplify the onboarding flow"
+                repo="acme / web"
+                time="2m ago"
+              />
+              <PreviewEvent
+                type="issue"
+                title="Improve search on mobile"
+                repo="acme / web"
+                time="18m ago"
+              />
+              <PreviewEvent
+                type="pr"
+                title="Add repository filters"
+                repo="acme / api"
+                time="32m ago"
+              />
+            </div>
           </div>
         </div>
-        <div className="liveBadge">
-          <span className={data.hasSupabaseConfig ? "pulse on" : "pulse"} />
-          <span>{data.hasSupabaseConfig ? "Connected" : "Waiting for data"}</span>
-        </div>
-      </header>
-
-      {data.errors.length > 0 ? (
-        <section className="notice" aria-label="Dashboard errors">
-          <strong>Supabase read failed</strong>
-          <span>{data.errors[0]}</span>
-        </section>
-      ) : null}
-
-      <section className="metricGrid" aria-label="Repository activity summary">
-        <Metric
-          label="Repositories"
-          value={data.repositories.data.length}
-          detail="Tracked from GitHub App events"
-        />
-        <Metric
-          label="Open Issues"
-          value={data.openIssues.data.length}
-          detail="Needs assignment or follow-through"
-        />
-        <Metric
-          label="Open PRs"
-          value={data.openPullRequests.data.length}
-          detail="Active review and merge flow"
-        />
-        <Metric
-          label="Last Event"
-          value={latestEvent?.event ?? "None"}
-          detail={latestEvent ? timeAgo(latestEvent.received_at) : "No webhook yet"}
-        />
       </section>
-
-      <section className="dashboardGrid">
-        <Panel title="Recent Events" meta="Webhook audit trail">
-          <EventList events={data.recentEvents.data} />
-        </Panel>
-
-        <Panel title="Repositories" meta="Latest connected repos">
-          <RepositoryList repositories={data.repositories.data} />
-        </Panel>
-
-        <Panel title="Open Issues" meta="Current issue queue">
-          <IssueList issues={data.openIssues.data} />
-        </Panel>
-
-        <Panel title="Open Pull Requests" meta="Active PR flow">
-          <PullRequestList pullRequests={data.openPullRequests.data} />
-        </Panel>
-
-        <Panel title="Merged Pull Requests" meta="Recently merged">
-          <PullRequestList pullRequests={data.mergedPullRequests.data} merged />
-        </Panel>
+      <section className="feature-band" aria-label="What Plinger tracks">
+        <article>
+          <span className="feature-icon blue">
+            <Radio size={21} />
+          </span>
+          <h3>Every update, in context.</h3>
+          <p>
+            Follow pushes, issue updates, and pull request activity across your
+            connected repositories.
+          </p>
+        </article>
+        <article>
+          <span className="feature-icon green">
+            <CircleDot size={21} />
+          </span>
+          <h3>Know what needs you.</h3>
+          <p>
+            Keep open issues and assignments in view, with a direct path back to
+            the work on GitHub.
+          </p>
+        </article>
+        <article>
+          <span className="feature-icon purple">
+            <GitMerge size={21} />
+          </span>
+          <h3>Follow the work to merged.</h3>
+          <p>
+            See active pull requests alongside completed merges, from the next
+            review to the latest release.
+          </p>
+        </article>
       </section>
+      <footer className="landing-footer">
+        <Brand />
+        <span>A clearer view of your GitHub work.</span>
+        <Link href="/dashboard">
+          Let&apos;s see what&apos;s happening <ArrowRight size={16} />
+        </Link>
+      </footer>
     </main>
   );
 }
-
-function Metric({
-  label,
-  value,
-  detail,
-}: {
-  label: string;
-  value: string | number;
-  detail: string;
-}) {
-  return (
-    <article className="metric">
-      <span>{label}</span>
-      <strong>{value}</strong>
-      <p>{detail}</p>
-    </article>
-  );
-}
-
-function Panel({
+function PreviewEvent({
+  type,
   title,
-  meta,
-  children,
+  repo,
+  time,
 }: {
+  type: "merged" | "issue" | "pr";
   title: string;
-  meta: string;
-  children: React.ReactNode;
+  repo: string;
+  time: string;
 }) {
+  const Icon =
+    type === "merged"
+      ? GitMerge
+      : type === "issue"
+        ? CircleDot
+        : GitPullRequest;
   return (
-    <section className="panel">
-      <div className="panelHeader">
-        <h2>{title}</h2>
-        <span>{meta}</span>
+    <div className="preview-event">
+      <span className={`event-icon ${type === "merged" ? "purple" : "green"}`}>
+        <Icon size={17} />
+      </span>
+      <div>
+        <strong>{title}</strong>
+        <p>
+          {repo}{" "}
+          <span>
+            ·{" "}
+            {type === "merged"
+              ? "Pull request merged"
+              : type === "issue"
+                ? "Issue assigned"
+                : "Pull request opened"}
+          </span>
+        </p>
       </div>
-      {children}
-    </section>
-  );
-}
-
-function EventList({ events }: { events: WebhookEventRow[] }) {
-  if (events.length === 0) {
-    return <EmptyState label="No webhook events stored yet." />;
-  }
-
-  return (
-    <div className="list">
-      {events.map((event) => (
-        <article className="row" key={event.id}>
-          <div>
-            <div className="rowTitle">
-              <span className="tag purple">{event.event}</span>
-              {event.action ? <span className="tag">{event.action}</span> : null}
-            </div>
-            <p>{event.repository_full_name ?? "No repository attached"}</p>
-          </div>
-          <time>{timeAgo(event.received_at)}</time>
-        </article>
-      ))}
+      <time>{time}</time>
     </div>
   );
-}
-
-function RepositoryList({ repositories }: { repositories: RepositoryRow[] }) {
-  if (repositories.length === 0) {
-    return <EmptyState label="No repositories captured yet." />;
-  }
-
-  return (
-    <div className="list">
-      {repositories.map((repository) => (
-        <article className="row" key={repository.id}>
-          <div>
-            <h3>{repository.full_name}</h3>
-            <p>
-              {repository.default_branch ?? "default branch unknown"}
-              {repository.private ? " / private" : " / public"}
-            </p>
-          </div>
-          <span className={repository.disabled ? "state muted" : "state"}>
-            {repository.disabled ? "Disabled" : "Active"}
-          </span>
-        </article>
-      ))}
-    </div>
-  );
-}
-
-function IssueList({ issues }: { issues: IssueRow[] }) {
-  if (issues.length === 0) {
-    return <EmptyState label="No open issues captured yet." />;
-  }
-
-  return (
-    <div className="list">
-      {issues.map((issue) => (
-        <article className="row" key={issue.id}>
-          <div>
-            <h3>
-              #{issue.github_issue_number} {issue.title}
-            </h3>
-            <p>{formatAssignees(issue.assignee_logins)}</p>
-          </div>
-          <span className="state">{issue.state}</span>
-        </article>
-      ))}
-    </div>
-  );
-}
-
-function PullRequestList({
-  pullRequests,
-  merged = false,
-}: {
-  pullRequests: PullRequestRow[];
-  merged?: boolean;
-}) {
-  if (pullRequests.length === 0) {
-    return (
-      <EmptyState
-        label={merged ? "No merged pull requests captured yet." : "No open pull requests captured yet."}
-      />
-    );
-  }
-
-  return (
-    <div className="list">
-      {pullRequests.map((pullRequest) => (
-        <article className="row" key={pullRequest.id}>
-          <div>
-            <h3>
-              #{pullRequest.github_pull_request_number} {pullRequest.title}
-            </h3>
-            <p>
-              {pullRequest.base_ref ?? "base"} ← {pullRequest.head_ref ?? "head"}
-            </p>
-          </div>
-          <span className={pullRequest.merged ? "state purple" : "state"}>
-            {pullRequest.merged ? "merged" : pullRequest.mergeable_state ?? pullRequest.state}
-          </span>
-        </article>
-      ))}
-    </div>
-  );
-}
-
-function EmptyState({ label }: { label: string }) {
-  return <p className="empty">{label}</p>;
-}
-
-function formatAssignees(assignees: string[]) {
-  return assignees.length > 0
-    ? assignees.map((name) => `@${name}`).join(", ")
-    : "Unassigned";
-}
-
-function timeAgo(value: string) {
-  const date = new Date(value);
-  const seconds = Math.max(0, Math.round((Date.now() - date.getTime()) / 1000));
-
-  if (seconds < 60) {
-    return `${seconds}s ago`;
-  }
-
-  const minutes = Math.round(seconds / 60);
-
-  if (minutes < 60) {
-    return `${minutes}m ago`;
-  }
-
-  const hours = Math.round(minutes / 60);
-
-  if (hours < 24) {
-    return `${hours}h ago`;
-  }
-
-  const days = Math.round(hours / 24);
-  return `${days}d ago`;
 }
