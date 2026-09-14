@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { Brand } from "../ui/brand";
 import { createAuthClient } from "../../lib/supabase/auth-client";
@@ -5,6 +6,14 @@ import { isAdmin } from "../../lib/supabase/auth-config";
 import { LoginForm } from "./form";
 
 export const dynamic = "force-dynamic";
+
+export const metadata: Metadata = {
+  title: "Sign in",
+  robots: {
+    index: false,
+    follow: false,
+  },
+};
 
 export default async function Login() {
   const supabase = await createAuthClient();

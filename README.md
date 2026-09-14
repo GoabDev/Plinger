@@ -92,11 +92,15 @@ npm.cmd run supabase:push
 After that, add these environment variables to Vercel:
 
 ```text
+NEXT_PUBLIC_SITE_URL=https://YOUR-DOMAIN
 SUPABASE_URL=https://YOUR_PROJECT_REF.supabase.co
 SUPABASE_SECRET_KEY=sb_secret_...
 SUPABASE_PUBLISHABLE_KEY=sb_publishable_...
 PLINGER_ADMIN_EMAIL=your-admin-email@example.com
 ```
+
+`NEXT_PUBLIC_SITE_URL` is used for canonical URLs, robots, sitemap, and social
+share previews. Set it to the production URL visitors should share.
 
 Use the secret key only for server-side webhook and dashboard data access. The
 publishable key is for Supabase Auth; neither key should be committed to Git.

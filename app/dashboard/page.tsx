@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { getDashboardData } from "../../lib/dashboard/data";
 import { createAuthClient } from "../../lib/supabase/auth-client";
 import { isAdmin } from "../../lib/supabase/auth-config";
@@ -5,6 +6,14 @@ import { redirect } from "next/navigation";
 import DashboardWorkspace from "./workspace";
 
 export const dynamic = "force-dynamic";
+
+export const metadata: Metadata = {
+  title: "Dashboard",
+  robots: {
+    index: false,
+    follow: false,
+  },
+};
 
 export default async function Dashboard() {
   const supabase = await createAuthClient();
