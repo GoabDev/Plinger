@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Activity,
+  ArrowLeft,
   ArrowUpRight,
   BookOpen,
   CircleDot,
@@ -49,6 +50,17 @@ export default function ScoutersView({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [retry, setRetry] = useState(0);
+  const [mobileProfileOpen, setMobileProfileOpen] = useState(false);
+  const backButtonRef = useRef<HTMLButtonElement>(null);
+  const selectedRowRef = useRef<HTMLButtonElement | null>(null);
+
+  useEffect(() => {
+    if (mobileProfileOpen && backButtonRef.current?.getClientRects().length) {
+      backButtonRef.current.focus();
+    } else if (!mobileProfileOpen) {
+      selectedRowRef.current?.focus({ preventScroll: true });
+    }
+  }, [mobileProfileOpen]);
 
   useEffect(() => {
     if (selectedLogin && !ordered.some((scouter) => scouter.account_login === selectedLogin)) {
@@ -99,7 +111,7 @@ export default function ScoutersView({
     : [];
 
   return (
-    <section className="scouters-layout" aria-label="Scouters">
+    <section className={`scouters-layout ${mobileProfileOpen ? "is-profile-open" : ""}`} aria-label="Scouters">
       <div className="scouters-directory">
         <div className="scouters-directory-heading">
           <div>
@@ -144,7 +156,9 @@ export default function ScoutersView({
                 key={scouter.installation_id}
                 className={`scouter-directory-row ${selectedLogin === scouter.account_login ? "selected" : ""}`}
                 aria-current={selectedLogin === scouter.account_login ? "true" : undefined}
-                onClick={() => {
+                onClick={(event) => {
+                  selectedRowRef.current = event.currentTarget;
+                  setMobileProfileOpen(true);
                   setSelectedLogin(scouter.account_login);
                   setTab("issues");
                   setIssueFilter("all");
@@ -165,6 +179,9 @@ export default function ScoutersView({
       </div>
 
       <div className="scouters-profile" aria-live="polite">
+        <button ref={backButtonRef} type="button" className="scouters-back button button-white" onClick={() => setMobileProfileOpen(false)}>
+          <ArrowLeft size={16} aria-hidden="true" /> Back to scouters
+        </button>
         {!selectedLogin || unavailable ? (
           <ScouterEmpty title={unavailable ? "Scouters are unavailable" : "No scouter selected"} detail={unavailable ? "Refresh the workspace to try again." : "Install Plinger on a personal GitHub account to see it here."} />
         ) : loading ? (
@@ -217,7 +234,7 @@ export default function ScoutersView({
               ))}
             </div>
 
-            <div id="scouter-tab-panel" className="scouter-tab-panel" role="tabpanel" aria-labelledby={`scouter-tab-${tab}`}>
+            <div key={`${selectedLogin}-${tab}`} id="scouter-tab-panel" className="scouter-tab-panel" role="tabpanel" tabIndex={0} aria-labelledby={`scouter-tab-${tab}`}>
               {tab === "issues" && <>
                 <div className="scouter-content-heading"><h3>Currently assigned issues</h3><FilterGroup label="Issue status" values={[["all", "All"], ["open", "Open"], ["closed", "Closed"]]} value={issueFilter} onChange={(value) => setIssueFilter(value as IssueFilter)} /></div>
                 <IssueTable rows={issueRows} linkedPullRequests={profile.linkedPullRequests} />
