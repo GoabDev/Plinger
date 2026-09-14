@@ -1,5 +1,9 @@
-import { NextResponse } from "next/server";
-import { handleGitHubWebhook } from "../../../../lib/github/events";
+import { after, NextResponse } from "next/server";
+import {
+  isHandledGitHubWebhook,
+  processGitHubWebhook,
+} from "../../../../lib/github/events";
+import { storeWebhookEvent } from "../../../../lib/github/store";
 import {
   getGitHubWebhookHeaders,
   verifyGitHubSignature,
@@ -36,6 +40,8 @@ export async function POST(request: Request) {
     );
   }
 
+  const { event, delivery } = headers;
+
   let payload: Record<string, unknown>;
 
   try {
@@ -44,10 +50,47 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid JSON payload." }, { status: 400 });
   }
 
-  await handleGitHubWebhook({
-    event: headers.event,
-    delivery: headers.delivery,
-    payload,
+  if (!isHandledGitHubWebhook(event)) {
+    console.info("[github:webhook:ignored]", {
+      event,
+      delivery,
+    });
+    return NextResponse.json({ ok: true });
+  }
+
+  try {
+    const stored = await storeWebhookEvent({
+      event,
+      delivery,
+      payload,
+    });
+
+    if (!stored.ok || stored.skipped) {
+      return NextResponse.json({ error: "Webhook storage unavailable." }, { status: 503 });
+    }
+  } catch (error) {
+    console.error("[github:webhook:store-failed]", {
+      event,
+      delivery,
+      error,
+    });
+    return NextResponse.json({ error: "Webhook storage unavailable." }, { status: 503 });
+  }
+
+  after(async () => {
+    try {
+      await processGitHubWebhook({
+        event,
+        delivery,
+        payload,
+      });
+    } catch (error) {
+      console.error("[github:webhook:normalize-failed]", {
+        event,
+        delivery,
+        error,
+      });
+    }
   });
 
   return NextResponse.json({ ok: true });

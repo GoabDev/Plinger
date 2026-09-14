@@ -23,6 +23,7 @@ export type IssueRow = {
   assignee_logins: string[];
   labels: string[];
   opened_at: string | null;
+  closed_at: string | null;
   updated_at: string;
 };
 
@@ -39,7 +40,13 @@ export type PullRequestRow = {
   merged: boolean;
   merged_at: string | null;
   mergeable_state: string | null;
+  mergeable: boolean | null;
   updated_at: string;
+};
+
+export type IssuePullRequestRow = {
+  github_issue_id: number;
+  github_pull_request_id: number;
 };
 
 export type WebhookEventRow = {
@@ -62,11 +69,20 @@ export type InstallationRow = {
 };
 
 export async function getDashboardData() {
+  const links = await selectSupabaseRows<IssuePullRequestRow>({
+    table: "issue_pull_requests",
+    query: {
+      select: "github_issue_id,github_pull_request_id",
+      order: "updated_at.desc",
+      limit: "200",
+    },
+  });
+  const linkedPrIds = [...new Set(links.data.map((link) => String(link.github_pull_request_id)))];
   const [
     repositories,
     openIssues,
-    openPullRequests,
-    mergedPullRequests,
+    closedIssues,
+    linkedPullRequests,
     recentEvents,
     installations,
   ] = await Promise.all([
@@ -76,38 +92,41 @@ export async function getDashboardData() {
         select:
           "id,github_repository_id,owner_login,name,full_name,private,default_branch,archived,disabled,updated_at",
         order: "updated_at.desc",
-        limit: "6",
+        limit: "20",
       },
     }),
     selectSupabaseRows<IssueRow>({
       table: "issues",
       query: {
         select:
-          "id,github_issue_id,github_issue_number,title,state,url,assignee_logins,labels,opened_at,updated_at",
+          "id,github_issue_id,github_issue_number,title,state,url,assignee_logins,labels,opened_at,closed_at,updated_at",
         state: "eq.open",
         order: "updated_at.desc",
-        limit: "6",
+        limit: "50",
       },
     }),
-    selectSupabaseRows<PullRequestRow>({
+    selectSupabaseRows<IssueRow>({
+      table: "issues",
+      query: {
+        select: "id,github_issue_id,github_issue_number,title,state,url,assignee_logins,labels,opened_at,closed_at,updated_at",
+        state: "eq.closed",
+        order: "closed_at.desc.nullslast",
+        limit: "20",
+      },
+    }),
+    linkedPrIds.length ? selectSupabaseRows<PullRequestRow>({
       table: "pull_requests",
       query: {
         select:
-          "id,github_pull_request_id,github_pull_request_number,title,state,url,author_login,head_ref,base_ref,merged,merged_at,mergeable_state,updated_at",
-        state: "eq.open",
+          "id,github_pull_request_id,github_pull_request_number,title,state,url,author_login,head_ref,base_ref,merged,merged_at,mergeable,mergeable_state,updated_at",
+        github_pull_request_id: `in.(${linkedPrIds.join(",")})`,
         order: "updated_at.desc",
-        limit: "6",
+        limit: "200",
       },
-    }),
-    selectSupabaseRows<PullRequestRow>({
-      table: "pull_requests",
-      query: {
-        select:
-          "id,github_pull_request_id,github_pull_request_number,title,state,url,author_login,head_ref,base_ref,merged,merged_at,mergeable_state,updated_at",
-        merged: "eq.true",
-        order: "merged_at.desc.nullslast",
-        limit: "6",
-      },
+    }) : Promise.resolve({
+      data: [] as PullRequestRow[],
+      skipped: false,
+      error: undefined as string | undefined,
     }),
     selectSupabaseRows<WebhookEventRow>({
       table: "webhook_events",
@@ -128,28 +147,42 @@ export async function getDashboardData() {
       },
     }),
   ]);
+  const openPullRequests = {
+    ...linkedPullRequests,
+    data: linkedPullRequests.data.filter((pr) => !pr.merged),
+  };
+  const mergedPullRequests = {
+    ...linkedPullRequests,
+    data: linkedPullRequests.data.filter((pr) => pr.merged),
+  };
 
   return {
     repositories,
     openIssues,
+    closedIssues,
     openPullRequests,
     mergedPullRequests,
+    links,
     recentEvents,
     installations,
     hasSupabaseConfig:
       !repositories.skipped &&
       !openIssues.skipped &&
+      !closedIssues.skipped &&
       !openPullRequests.skipped &&
       !mergedPullRequests.skipped &&
       !recentEvents.skipped &&
-      !installations.skipped,
+      !installations.skipped &&
+      !links.skipped,
     errors: [
       repositories.error,
       openIssues.error,
+      closedIssues.error,
       openPullRequests.error,
       mergedPullRequests.error,
       recentEvents.error,
       installations.error,
+      links.error,
     ].filter((error): error is string => Boolean(error)),
   };
 }

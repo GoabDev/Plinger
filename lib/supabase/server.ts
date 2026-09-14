@@ -90,6 +90,26 @@ export async function upsertSupabaseRow({
   });
 }
 
+export async function deleteSupabaseRows({
+  table,
+  query,
+}: {
+  table: string;
+  query: Record<string, string>;
+}): Promise<SupabaseWriteResult> {
+  const supabaseUrl = process.env.SUPABASE_URL;
+  const secretKey = getSupabaseSecretKey();
+  if (!supabaseUrl || !secretKey) return { ok: true, skipped: true };
+
+  const url = new URL(`/rest/v1/${table}`, supabaseUrl);
+  for (const [key, value] of Object.entries(query)) url.searchParams.set(key, value);
+  const response = await fetch(url, {
+    method: "DELETE",
+    headers: { apikey: secretKey, authorization: `Bearer ${secretKey}` },
+  });
+  return response.ok ? { ok: true } : { ok: false, error: await response.text() };
+}
+
 async function writeSupabaseRow({
   table,
   row,

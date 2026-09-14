@@ -1,6 +1,6 @@
 import { getAction, getRepositoryFullName } from "./payload";
 import { normalizeGitHubWebhook } from "./normalize";
-import { storeWebhookEvent } from "./store";
+import { syncLinkedPullRequests } from "./monitor";
 
 type GitHubWebhookPayload = Record<string, unknown>;
 
@@ -12,7 +12,11 @@ const handledEvents = new Set([
   "push",
 ]);
 
-export async function handleGitHubWebhook({
+export function isHandledGitHubWebhook(event: string) {
+  return handledEvents.has(event);
+}
+
+export async function processGitHubWebhook({
   event,
   delivery,
   payload,
@@ -21,13 +25,15 @@ export async function handleGitHubWebhook({
   delivery: string;
   payload: GitHubWebhookPayload;
 }) {
-  if (!handledEvents.has(event)) {
-    console.info("[github:webhook:ignored]", { event, delivery });
-    return;
-  }
-
-  const storeResult = await storeWebhookEvent({ event, delivery, payload });
   const normalizeResult = await normalizeGitHubWebhook({ event, payload });
+
+  if (normalizeResult.ok && !normalizeResult.skipped) {
+    try {
+      await syncLinkedPullRequests(event, payload);
+    } catch (error) {
+      console.error("[github:monitor:failed]", { event, delivery, error });
+    }
+  }
 
   if (!normalizeResult.ok) {
     console.error("[github:webhook:normalize-failed]", {
@@ -42,8 +48,7 @@ export async function handleGitHubWebhook({
     delivery,
     action: getAction(payload),
     repository: getRepositoryFullName(payload),
-    stored: !storeResult.skipped && storeResult.ok,
-    storageSkipped: Boolean(storeResult.skipped),
+    stored: true,
     normalized: normalizeResult.ok && !normalizeResult.skipped,
     normalizeSkipped: Boolean(normalizeResult.skipped),
     normalizedTables: normalizeResult.writes,

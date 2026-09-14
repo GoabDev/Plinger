@@ -19,6 +19,7 @@ import {
   Inbox,
   LayoutDashboard,
   LockKeyhole,
+  LogOut,
   Menu,
   Plus,
   RefreshCw,
@@ -29,11 +30,13 @@ import {
 } from "lucide-react";
 import type {
   IssueRow,
+  IssuePullRequestRow,
   PullRequestRow,
   RepositoryRow,
   WebhookEventRow,
 } from "../../lib/dashboard/data";
 import { Brand } from "../ui/brand";
+import { signOut } from "../login/actions";
 import {
   Select,
   SelectContent,
@@ -47,13 +50,16 @@ type View =
   | "activity"
   | "repositories"
   | "issues"
+  | "closed-issues"
   | "pull-requests"
   | "merged";
 type Props = {
   repositories: RepositoryRow[];
   issues: IssueRow[];
+  closedIssues: IssueRow[];
   pullRequests: PullRequestRow[];
   merged: PullRequestRow[];
+  links: IssuePullRequestRow[];
   events: WebhookEventRow[];
   connected: boolean;
   failed: boolean;
@@ -64,6 +70,7 @@ const navigation: { id: View; label: string; icon: LucideIcon }[] = [
   { id: "activity", label: "Activity", icon: Activity },
   { id: "repositories", label: "Repositories", icon: BookOpen },
   { id: "issues", label: "Open issues", icon: CircleDot },
+  { id: "closed-issues", label: "Closed issues", icon: Check },
   { id: "pull-requests", label: "Pull requests", icon: GitPullRequest },
   { id: "merged", label: "Merged", icon: GitMerge },
 ];
@@ -72,6 +79,7 @@ const subtitles: Record<View, string> = {
   activity: "The latest updates from your connected repositories.",
   repositories: "Your recently updated repositories, together in one place.",
   issues: "Open work, assignments, and the details that matter.",
+  "closed-issues": "Recently closed issues across your repositories.",
   "pull-requests":
     "Follow active changes from the first commit to the final review.",
   merged: "A record of work that made it across the finish line.",
@@ -80,8 +88,10 @@ const subtitles: Record<View, string> = {
 export default function DashboardWorkspace({
   repositories,
   issues,
+  closedIssues,
   pullRequests,
   merged,
+  links,
   events,
   connected,
   failed,
@@ -98,6 +108,9 @@ export default function DashboardWorkspace({
   const [menuOpen, setMenuOpen] = useState(false);
   const menuTrigger = useRef<HTMLButtonElement>(null);
   const [pending, startTransition] = useTransition();
+  const [syncing, setSyncing] = useState(false);
+  const [syncMessage, setSyncMessage] = useState("");
+  const [syncFailed, setSyncFailed] = useState(false);
   const title = navigation.find((item) => item.id === view)!.label;
   const match = (...values: (string | null | undefined)[]) =>
     values.join(" ").toLowerCase().includes(query.trim().toLowerCase());
@@ -124,6 +137,23 @@ export default function DashboardWorkspace({
       ...issue.labels,
     ),
   );
+  const filteredClosedIssues = closedIssues.filter((issue) =>
+    match(issue.title, String(issue.github_issue_number), ...issue.assignee_logins, ...issue.labels),
+  );
+  const issueById = new Map([...issues, ...closedIssues].map((issue) => [String(issue.github_issue_id), issue]));
+  const prById = new Map([...pullRequests, ...merged].map((pr) => [String(pr.github_pull_request_id), pr]));
+  const prsByIssue = new Map<string, PullRequestRow[]>();
+  const issuesByPr = new Map<string, IssueRow[]>();
+  for (const link of links) {
+    const issueId = String(link.github_issue_id);
+    const prId = String(link.github_pull_request_id);
+    const issue = issueById.get(issueId);
+    const pr = prById.get(prId);
+    if (issue && pr) {
+      prsByIssue.set(issueId, [...(prsByIssue.get(issueId) ?? []), pr]);
+      issuesByPr.set(prId, [...(issuesByPr.get(prId) ?? []), issue]);
+    }
+  }
   const filterPrs = (items: PullRequestRow[]) =>
     items.filter((pr) =>
       match(
@@ -143,7 +173,28 @@ export default function DashboardWorkspace({
     setEventType("all");
     setRepository("all");
   };
-  const refresh = () => startTransition(() => router.refresh());
+  const refresh = async () => {
+    setSyncing(true);
+    setSyncFailed(false);
+    setSyncMessage("");
+    try {
+      const response = await fetch("/api/github/sync", { method: "POST" });
+      const result = (await response.json()) as { checked?: number; failed?: number; error?: string };
+      if (!response.ok) throw new Error(result.error ?? "GitHub sync failed");
+      setSyncFailed(Boolean(result.failed));
+      setSyncMessage(
+        result.failed
+          ? `Checked ${result.checked ?? 0} records; ${result.failed} could not be checked.`
+          : `Checked ${result.checked ?? 0} recent issues and linked pull requests.`,
+      );
+      startTransition(() => router.refresh());
+    } catch (error) {
+      setSyncFailed(true);
+      setSyncMessage(error instanceof Error ? error.message : "GitHub sync failed");
+    } finally {
+      setSyncing(false);
+    }
+  };
   const latest = events[0];
   const repoNames = [
     ...new Set(
@@ -228,6 +279,12 @@ export default function DashboardWorkspace({
             <span>Plinger on GitHub</span>
             <ArrowUpRight size={14} />
           </a>
+          <form action={signOut}>
+            <button className="nav-item" type="submit">
+              <LogOut size={18} aria-hidden="true" />
+              <span>Sign out</span>
+            </button>
+          </form>
           <div className="sidebar-status">
             <span className={`status-dot ${connected ? "" : "offline"}`} />
             <span>
@@ -283,10 +340,10 @@ export default function DashboardWorkspace({
               <button
                 className="button button-white"
                 onClick={refresh}
-                disabled={pending}
+                disabled={pending || syncing}
               >
-                <RefreshCw size={15} className={pending ? "spinning" : ""} />
-                {pending ? "Refreshing" : "Refresh"}
+                <RefreshCw size={15} className={pending || syncing ? "spinning" : ""} />
+                {pending || syncing ? "Syncing" : "Sync GitHub"}
               </button>
               <a
                 className="button button-black"
@@ -299,6 +356,11 @@ export default function DashboardWorkspace({
               </a>
             </div>
           </div>
+          {syncMessage && (
+            <p className={`sync-message ${syncFailed ? "sync-error" : ""}`} role="status">
+              {syncMessage}
+            </p>
+          )}
           {(!connected || failed) && (
             <div className="connection-notice" role="status">
               <Inbox size={19} />
@@ -333,7 +395,7 @@ export default function DashboardWorkspace({
                 onClick={() => navigate("issues")}
               />
               <Metric
-                label="Open pull requests"
+                label="Linked pull requests"
                 value={failed ? null : pullRequests.length}
                 icon={GitPullRequest}
                 tone="blue"
@@ -476,6 +538,7 @@ export default function DashboardWorkspace({
             )}
             {(view === "overview" ||
               view === "issues" ||
+              view === "closed-issues" ||
               view === "pull-requests" ||
               view === "merged") && (
               <section className="queue-section">
@@ -524,9 +587,10 @@ export default function DashboardWorkspace({
                     ))}
                   </div>
                 )}
-                {(view === "overview" ? queue : view) === "issues" ? (
+                {(view === "overview" ? queue : view) === "issues" || view === "closed-issues" ? (
                   <IssueList
-                    issues={filteredIssues}
+                    issues={view === "closed-issues" ? filteredClosedIssues : filteredIssues}
+                    linkedPrs={prsByIssue}
                     now={fetchedAt}
                     filtered={Boolean(query)}
                   />
@@ -539,6 +603,7 @@ export default function DashboardWorkspace({
                     }
                     now={fetchedAt}
                     merged={(view === "overview" ? queue : view) === "merged"}
+                    linkedIssues={issuesByPr}
                     filtered={Boolean(query)}
                   />
                 )}
@@ -797,18 +862,20 @@ function WorkTitle({ url, title }: { url: string | null; title: string }) {
 }
 function IssueList({
   issues,
+  linkedPrs,
   now,
   filtered,
 }: {
   issues: IssueRow[];
+  linkedPrs: Map<string, PullRequestRow[]>;
   now: number;
   filtered: boolean;
 }) {
   if (!issues.length)
     return (
       <EmptyState
-        title="No open issues here yet"
-        detail="New and updated open issues will appear in your queue."
+        title="No issues here yet"
+        detail="Issues will appear here as GitHub sends updates."
         filtered={filtered}
       />
     );
@@ -833,6 +900,11 @@ function IssueList({
                     <WorkTitle url={issue.url} title={issue.title} />
                     <p className="work-meta">
                       <span>#{issue.github_issue_number}</span>
+                      {(linkedPrs.get(String(issue.github_issue_id)) ?? []).map((pr) => (
+                        <a key={pr.id} href={pr.url ?? "#"} target="_blank" rel="noreferrer">
+                          PR #{pr.github_pull_request_number} · {prStatus(pr).label}
+                        </a>
+                      ))}
                       {issue.labels.slice(0, 2).map((label) => (
                         <span className="label-tag" key={label}>
                           {label}
@@ -864,9 +936,9 @@ function IssueList({
                 )}
               </td>
               <td>
-                <span className="badge green">
-                  <CircleDot size={12} />
-                  Open
+                <span className={`badge ${issue.state === "closed" ? "purple" : "green"}`}>
+                  {issue.state === "closed" ? <Check size={12} /> : <CircleDot size={12} />}
+                  {issue.state === "closed" ? "Closed" : "Open"}
                 </span>
               </td>
               <td>
@@ -883,11 +955,13 @@ function IssueList({
 }
 function PullRequestList({
   items,
+  linkedIssues,
   now,
   merged,
   filtered,
 }: {
   items: PullRequestRow[];
+  linkedIssues: Map<string, IssueRow[]>;
   now: number;
   merged: boolean;
   filtered: boolean;
@@ -901,7 +975,7 @@ function PullRequestList({
         detail={
           merged
             ? "Completed merges will appear as your team ships work."
-            : "New and updated pull requests will appear here."
+            : "Linked pull requests will appear here."
         }
         filtered={filtered}
       />
@@ -931,6 +1005,11 @@ function PullRequestList({
                     <WorkTitle url={pr.url} title={pr.title} />
                     <p className="work-meta">
                       <span>#{pr.github_pull_request_number}</span>
+                      {(linkedIssues.get(String(pr.github_pull_request_id)) ?? []).map((issue) => (
+                        <a key={issue.id} href={issue.url ?? "#"} target="_blank" rel="noreferrer">
+                          Issue #{issue.github_issue_number}
+                        </a>
+                      ))}
                       <span className="branch-name">
                         {pr.head_ref ?? "head"} <ArrowRight size={11} />{" "}
                         {pr.base_ref ?? "base"}
@@ -942,13 +1021,9 @@ function PullRequestList({
               <td>{pr.author_login ?? "Unknown"}</td>
               <td>
                 <span
-                  className={`badge ${merged ? "purple" : pr.mergeable_state === "dirty" ? "amber" : "green"}`}
+                  className={`badge ${merged ? "purple" : prStatus(pr).tone}`}
                 >
-                  {merged
-                    ? "Merged"
-                    : pr.mergeable_state === "dirty"
-                      ? "Conflicts"
-                      : "Open"}
+                  {merged ? "Merged" : prStatus(pr).label}
                 </span>
               </td>
               <td>
@@ -965,6 +1040,23 @@ function PullRequestList({
       </table>
     </div>
   );
+}
+
+function prStatus(pr: PullRequestRow): { label: string; tone: string } {
+  if (pr.merged) return { label: "Merged", tone: "purple" };
+  if (pr.state === "closed") return { label: "Closed unmerged", tone: "amber" };
+  if (pr.mergeable === false || pr.mergeable_state === "dirty")
+    return { label: "Conflicts", tone: "amber" };
+  switch (pr.mergeable_state) {
+    case "unstable": return { label: "Checks not passing", tone: "amber" };
+    case "blocked": return { label: "Blocked", tone: "amber" };
+    case "draft": return { label: "Draft", tone: "neutral" };
+    case "behind": return { label: "Behind base", tone: "amber" };
+    case "clean": return pr.mergeable === true
+      ? { label: "Ready", tone: "green" }
+      : { label: "Checking", tone: "neutral" };
+    default: return { label: "Checking", tone: "neutral" };
+  }
 }
 function eventName(event: string) {
   return (
