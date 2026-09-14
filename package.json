@@ -7,7 +7,12 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "supabase": "set SUPABASE_TELEMETRY_DISABLED=1&& supabase",
+    "supabase:login": "set SUPABASE_TELEMETRY_DISABLED=1&& supabase login",
+    "supabase:link": "set SUPABASE_TELEMETRY_DISABLED=1&& supabase link",
+    "supabase:push": "set SUPABASE_TELEMETRY_DISABLED=1&& supabase db push",
+    "supabase:advisors": "set SUPABASE_TELEMETRY_DISABLED=1&& supabase db lint"
   },
   "dependencies": {
     "next": "latest",
@@ -20,6 +25,7 @@
     "@types/react-dom": "latest",
     "eslint": "latest",
     "eslint-config-next": "latest",
+    "supabase": "^2.117.0",
     "typescript": "latest"
   }
 }
