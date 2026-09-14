@@ -151,3 +151,24 @@ the old local key will no longer authenticate.
 
 If webhook storage is unavailable, Plinger returns 503 so GitHub does not
 mistake an unstored event for a successful delivery.
+
+## Scouters
+
+Apply `supabase/migrations/20260914155739_scouter_installation_state.sql` with
+`npm.cmd run supabase:push` before deploying the Scouters view. It records
+personal GitHub App uninstallations and adds indexes for per-account lookups.
+
+The admin-only Scouters view reads current personal installations from GitHub's
+App installations API and combines them with recorded removed installations.
+An organization installation does not identify which organization
+members have joined. A profile shows assigned issues, authored pull requests,
+webhook activity associated with that account, and connected repositories
+owned by it. Counts cover all stored matching records; each detail list shows
+only its most recent 20 records (30 for activity). Closed PRs exclude merged
+PRs, so the two totals do not overlap. Assigned issue rows also show recorded
+linked PR statuses, including conflicts and closed-without-merge states, even
+when another user authored the PR. Scouters does not request or store a user's
+personal access token.
+Issue assignment totals use the latest stored assignee list, not a historical
+assignment ledger. An issue unassigned later will no longer count for that
+scouter.

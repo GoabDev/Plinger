@@ -6,6 +6,7 @@ type SupabaseWriteResult = {
 
 type SupabaseSelectResult<T> = {
   data: T[];
+  count?: number;
   skipped?: boolean;
   error?: string;
 };
@@ -17,9 +18,11 @@ export function isSupabaseConfigured() {
 export async function selectSupabaseRows<T>({
   table,
   query,
+  count,
 }: {
   table: string;
   query?: Record<string, string>;
+  count?: "exact";
 }): Promise<SupabaseSelectResult<T>> {
   const supabaseUrl = process.env.SUPABASE_URL;
   const secretKey = getSupabaseSecretKey();
@@ -40,6 +43,7 @@ export async function selectSupabaseRows<T>({
       apikey: secretKey,
       authorization: `Bearer ${secretKey}`,
       accept: "application/json",
+      ...(count ? { prefer: `count=${count}` } : {}),
     },
     cache: "no-store",
   });
@@ -51,8 +55,10 @@ export async function selectSupabaseRows<T>({
     };
   }
 
+  const total = response.headers.get("content-range")?.split("/")[1];
   return {
     data: (await response.json()) as T[],
+    ...(count && total && /^\d+$/.test(total) ? { count: Number(total) } : {}),
   };
 }
 

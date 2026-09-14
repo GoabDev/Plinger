@@ -23,7 +23,7 @@ export async function normalizeGitHubWebhook({
     errors: [],
   };
 
-  await upsertInstallation(payload, result);
+  await upsertInstallation(event, payload, result);
   await upsertRepositoryFromPayload(payload, result);
 
   if (event === "installation_repositories") {
@@ -41,7 +41,7 @@ export async function normalizeGitHubWebhook({
   return result;
 }
 
-async function upsertInstallation(payload: JsonObject, result: NormalizeResult) {
+async function upsertInstallation(event: string, payload: JsonObject, result: NormalizeResult) {
   const installation = asObject(payload.installation);
 
   if (!installation) {
@@ -55,16 +55,22 @@ async function upsertInstallation(payload: JsonObject, result: NormalizeResult) 
     return;
   }
 
+  const action = asString(payload.action);
   await writeRow(
     "github_installations",
     "installation_id",
     {
       installation_id: installationId,
-      account_id: asNumber(account?.id),
-      account_login: asString(account?.login),
-      account_type: asString(account?.type),
-      target_type: asString(installation.target_type),
-      suspended_at: asString(installation.suspended_at),
+      ...(account && {
+        account_id: asNumber(account.id),
+        account_login: asString(account.login),
+        account_type: asString(account.type),
+      }),
+      ...(typeof installation.target_type === "string" && { target_type: installation.target_type }),
+      ...("suspended_at" in installation && { suspended_at: asString(installation.suspended_at) }),
+      ...(event === "installation" && (action === "deleted" || action === "created")
+        ? { uninstalled_at: action === "deleted" ? new Date().toISOString() : null }
+        : {}),
       updated_at: new Date().toISOString(),
     },
     result,

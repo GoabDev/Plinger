@@ -26,6 +26,7 @@ import {
   Search,
   Settings2,
   X,
+  Users,
   type LucideIcon,
 } from "lucide-react";
 import type {
@@ -35,6 +36,9 @@ import type {
   RepositoryRow,
   WebhookEventRow,
 } from "../../lib/dashboard/data";
+import { prStatus } from "../../lib/dashboard/status";
+import type { ScouterRow } from "../../lib/dashboard/scouters";
+import ScoutersView from "./scouters-view";
 import { Brand } from "../ui/brand";
 import { signOut } from "../login/actions";
 import {
@@ -52,7 +56,8 @@ type View =
   | "issues"
   | "closed-issues"
   | "pull-requests"
-  | "merged";
+  | "merged"
+  | "scouters";
 type Props = {
   repositories: RepositoryRow[];
   issues: IssueRow[];
@@ -61,6 +66,9 @@ type Props = {
   merged: PullRequestRow[];
   links: IssuePullRequestRow[];
   events: WebhookEventRow[];
+  scouters: ScouterRow[];
+  scouterCount: number;
+  scoutersUnavailable: boolean;
   connected: boolean;
   failed: boolean;
   fetchedAt: number;
@@ -69,6 +77,7 @@ const navigation: { id: View; label: string; icon: LucideIcon }[] = [
   { id: "overview", label: "Overview", icon: LayoutDashboard },
   { id: "activity", label: "Activity", icon: Activity },
   { id: "repositories", label: "Repositories", icon: BookOpen },
+  { id: "scouters", label: "Scouters", icon: Users },
   { id: "issues", label: "Open issues", icon: CircleDot },
   { id: "closed-issues", label: "Closed issues", icon: Check },
   { id: "pull-requests", label: "Pull requests", icon: GitPullRequest },
@@ -78,6 +87,7 @@ const subtitles: Record<View, string> = {
   overview: "A little clarity on everything moving across your repositories.",
   activity: "The latest updates from your connected repositories.",
   repositories: "Your recently updated repositories, together in one place.",
+  scouters: "Personal GitHub accounts connected to Plinger and their work.",
   issues: "Open work, assignments, and the details that matter.",
   "closed-issues": "Recently closed issues across your repositories.",
   "pull-requests":
@@ -93,6 +103,9 @@ export default function DashboardWorkspace({
   merged,
   links,
   events,
+  scouters,
+  scouterCount,
+  scoutersUnavailable,
   connected,
   failed,
   fetchedAt,
@@ -410,7 +423,7 @@ export default function DashboardWorkspace({
               />
             </section>
           )}
-          <div className="workspace-toolbar">
+          {view !== "scouters" && <div className="workspace-toolbar">
             <label className="search-field">
               <Search size={17} />
               <input
@@ -440,8 +453,11 @@ export default function DashboardWorkspace({
                 Refreshed {new Date(fetchedAt).toISOString().slice(11, 16)} UTC
               </time>
             </span>
-          </div>
-          <div
+          </div>}
+          {view === "scouters" && (
+            <ScoutersView scouters={scouters} total={scouterCount} unavailable={scoutersUnavailable} refreshKey={fetchedAt} />
+          )}
+          {view !== "scouters" && <div
             aria-busy={pending}
             className={view === "overview" ? "overview-grid" : "single-view"}
           >
@@ -609,7 +625,7 @@ export default function DashboardWorkspace({
                 )}
               </section>
             )}
-          </div>
+          </div>}
           <footer className="workspace-footer">
             <span>
               Plinger <span className="footer-dot">/</span> A clearer view of
@@ -1042,22 +1058,6 @@ function PullRequestList({
   );
 }
 
-function prStatus(pr: PullRequestRow): { label: string; tone: string } {
-  if (pr.merged) return { label: "Merged", tone: "purple" };
-  if (pr.state === "closed") return { label: "Closed unmerged", tone: "amber" };
-  if (pr.mergeable === false || pr.mergeable_state === "dirty")
-    return { label: "Conflicts", tone: "amber" };
-  switch (pr.mergeable_state) {
-    case "unstable": return { label: "Checks not passing", tone: "amber" };
-    case "blocked": return { label: "Blocked", tone: "amber" };
-    case "draft": return { label: "Draft", tone: "neutral" };
-    case "behind": return { label: "Behind base", tone: "amber" };
-    case "clean": return pr.mergeable === true
-      ? { label: "Ready", tone: "green" }
-      : { label: "Checking", tone: "neutral" };
-    default: return { label: "Checking", tone: "neutral" };
-  }
-}
 function eventName(event: string) {
   return (
     (

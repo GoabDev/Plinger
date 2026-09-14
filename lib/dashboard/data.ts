@@ -1,4 +1,5 @@
 import { selectSupabaseRows } from "../supabase/server";
+import { getScouterDirectory } from "./scouters";
 
 export type RepositoryRow = {
   id: string;
@@ -85,6 +86,7 @@ export async function getDashboardData() {
     linkedPullRequests,
     recentEvents,
     installations,
+    scouters,
   ] = await Promise.all([
     selectSupabaseRows<RepositoryRow>({
       table: "repositories",
@@ -146,6 +148,7 @@ export async function getDashboardData() {
         limit: "6",
       },
     }),
+    getScouterDirectory(),
   ]);
   const openPullRequests = {
     ...linkedPullRequests,
@@ -165,6 +168,7 @@ export async function getDashboardData() {
     links,
     recentEvents,
     installations,
+    scouters,
     hasSupabaseConfig:
       !repositories.skipped &&
       !openIssues.skipped &&

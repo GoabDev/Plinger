@@ -23,6 +23,9 @@ export default async function Dashboard() {
       merged={data.mergedPullRequests.data}
       links={data.links.data}
       events={data.recentEvents.data}
+      scouters={data.scouters.data}
+      scouterCount={data.scouters.count ?? data.scouters.data.length}
+      scoutersUnavailable={Boolean(data.scouters.error)}
       connected={data.hasSupabaseConfig && data.errors.length === 0}
       failed={data.errors.length > 0}
       fetchedAt={Date.now()}
