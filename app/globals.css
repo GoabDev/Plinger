@@ -2088,6 +2088,7 @@ ul {
 .scouters-directory-heading h2 { font-size: 16px; font-weight: 650; }
 .scouters-directory-heading span { display: block; margin-top: 4px; color: var(--muted); font-size: 12px; }
 .scouters-directory-heading svg { color: #8a8d98; }
+.scouters-history-warning { margin: 0 14px 12px; padding: 9px 10px; border: 1px solid #ebd8ae; border-radius: 4px; background: #fffaf0; color: #735518; font-size: 12px; line-height: 1.4; }
 .scouters-search {
   display: flex;
   align-items: center;

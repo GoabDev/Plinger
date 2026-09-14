@@ -47,12 +47,17 @@ export async function getScouterDirectory() {
           limit: "1000",
         },
         count: "exact",
-      }),
+      }).catch(() => ({
+        data: [] as ScouterRow[],
+        error: "Scouter history unavailable",
+        skipped: false,
+        count: undefined,
+      })),
     ]);
-    if (historical.error || historical.skipped || historical.count === undefined) {
-      return { data: [] as ScouterRow[], error: "Scouter history unavailable" };
-    }
-    const byInstallation = new Map<number, ScouterRow>(historical.data.map((row) => [row.installation_id, row]));
+    const historyUnavailable = Boolean(historical.error || historical.skipped || historical.count === undefined);
+    const byInstallation = new Map<number, ScouterRow>(
+      (historyUnavailable ? [] : historical.data).map((row) => [row.installation_id, row]),
+    );
     for (const installation of current) {
       if (installation.account?.type !== "User" || !installation.account.login) continue;
       byInstallation.set(installation.id, {
@@ -65,7 +70,7 @@ export async function getScouterDirectory() {
         created_at: installation.created_at,
       });
     }
-    return { data: [...byInstallation.values()], count: byInstallation.size };
+    return { data: [...byInstallation.values()], count: byInstallation.size, historyUnavailable };
   } catch (error) {
     console.error("[scouters:directory:failed]", error);
     return { data: [] as ScouterRow[], error: "Scouter directory unavailable" };

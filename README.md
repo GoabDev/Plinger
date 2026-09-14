@@ -155,8 +155,9 @@ mistake an unstored event for a successful delivery.
 ## Scouters
 
 Apply `supabase/migrations/20260914155739_scouter_installation_state.sql` with
-`npm.cmd run supabase:push` before deploying the Scouters view. It records
-personal GitHub App uninstallations and adds indexes for per-account lookups.
+`npm.cmd run supabase:push`. It records personal GitHub App uninstallations and
+adds indexes for per-account lookups. Current installations still display if
+this migration is pending, but removed-installation history is unavailable.
 
 The admin-only Scouters view reads current personal installations from GitHub's
 App installations API and combines them with recorded removed installations.

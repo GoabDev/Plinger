@@ -69,6 +69,7 @@ type Props = {
   scouters: ScouterRow[];
   scouterCount: number;
   scoutersUnavailable: boolean;
+  scouterHistoryUnavailable: boolean;
   connected: boolean;
   failed: boolean;
   fetchedAt: number;
@@ -106,6 +107,7 @@ export default function DashboardWorkspace({
   scouters,
   scouterCount,
   scoutersUnavailable,
+  scouterHistoryUnavailable,
   connected,
   failed,
   fetchedAt,
@@ -455,7 +457,7 @@ export default function DashboardWorkspace({
             </span>
           </div>}
           {view === "scouters" && (
-            <ScoutersView scouters={scouters} total={scouterCount} unavailable={scoutersUnavailable} refreshKey={fetchedAt} />
+            <ScoutersView scouters={scouters} total={scouterCount} unavailable={scoutersUnavailable} historyUnavailable={scouterHistoryUnavailable} refreshKey={fetchedAt} />
           )}
           {view !== "scouters" && <div
             aria-busy={pending}

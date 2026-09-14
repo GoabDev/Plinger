@@ -26,11 +26,13 @@ export default function ScoutersView({
   scouters,
   total,
   unavailable,
+  historyUnavailable,
   refreshKey,
 }: {
   scouters: ScouterRow[];
   total: number;
   unavailable: boolean;
+  historyUnavailable: boolean;
   refreshKey: number;
 }) {
   const ordered = useMemo(
@@ -106,6 +108,7 @@ export default function ScoutersView({
           </div>
           <Users size={18} aria-hidden="true" />
         </div>
+        {historyUnavailable && <p className="scouters-history-warning" role="status">Removed-installation history is unavailable.</p>}
         <label className="scouters-search">
           <Search size={16} aria-hidden="true" />
           <input

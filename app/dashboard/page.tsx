@@ -26,6 +26,7 @@ export default async function Dashboard() {
       scouters={data.scouters.data}
       scouterCount={data.scouters.count ?? data.scouters.data.length}
       scoutersUnavailable={Boolean(data.scouters.error)}
+      scouterHistoryUnavailable={Boolean(data.scouters.historyUnavailable)}
       connected={data.hasSupabaseConfig && data.errors.length === 0}
       failed={data.errors.length > 0}
       fetchedAt={Date.now()}
