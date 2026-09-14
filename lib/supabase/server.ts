@@ -4,8 +4,56 @@ type SupabaseWriteResult = {
   error?: string;
 };
 
+type SupabaseSelectResult<T> = {
+  data: T[];
+  skipped?: boolean;
+  error?: string;
+};
+
 export function isSupabaseConfigured() {
   return Boolean(process.env.SUPABASE_URL && getSupabaseSecretKey());
+}
+
+export async function selectSupabaseRows<T>({
+  table,
+  query,
+}: {
+  table: string;
+  query?: Record<string, string>;
+}): Promise<SupabaseSelectResult<T>> {
+  const supabaseUrl = process.env.SUPABASE_URL;
+  const secretKey = getSupabaseSecretKey();
+
+  if (!supabaseUrl || !secretKey) {
+    return { data: [], skipped: true };
+  }
+
+  const url = new URL(`/rest/v1/${table}`, supabaseUrl);
+
+  for (const [key, value] of Object.entries(query ?? {})) {
+    url.searchParams.set(key, value);
+  }
+
+  const response = await fetch(url, {
+    method: "GET",
+    headers: {
+      apikey: secretKey,
+      authorization: `Bearer ${secretKey}`,
+      accept: "application/json",
+    },
+    cache: "no-store",
+  });
+
+  if (!response.ok) {
+    return {
+      data: [],
+      error: await response.text(),
+    };
+  }
+
+  return {
+    data: (await response.json()) as T[],
+  };
 }
 
 export async function insertSupabaseRow({
