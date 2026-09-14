@@ -1,4 +1,4 @@
-type SupabaseInsertResult = {
+type SupabaseWriteResult = {
   ok: boolean;
   skipped?: boolean;
   error?: string;
@@ -16,7 +16,43 @@ export async function insertSupabaseRow({
   table: string;
   row: Record<string, unknown>;
   onConflict?: string;
-}): Promise<SupabaseInsertResult> {
+}): Promise<SupabaseWriteResult> {
+  return writeSupabaseRow({
+    table,
+    row,
+    onConflict,
+    duplicateStrategy: "ignore",
+  });
+}
+
+export async function upsertSupabaseRow({
+  table,
+  row,
+  onConflict,
+}: {
+  table: string;
+  row: Record<string, unknown>;
+  onConflict: string;
+}): Promise<SupabaseWriteResult> {
+  return writeSupabaseRow({
+    table,
+    row,
+    onConflict,
+    duplicateStrategy: "merge",
+  });
+}
+
+async function writeSupabaseRow({
+  table,
+  row,
+  onConflict,
+  duplicateStrategy,
+}: {
+  table: string;
+  row: Record<string, unknown>;
+  onConflict?: string;
+  duplicateStrategy: "ignore" | "merge";
+}): Promise<SupabaseWriteResult> {
   const supabaseUrl = process.env.SUPABASE_URL;
   const secretKey = getSupabaseSecretKey();
 
@@ -37,7 +73,7 @@ export async function insertSupabaseRow({
       authorization: `Bearer ${secretKey}`,
       "content-type": "application/json",
       prefer: onConflict
-        ? "resolution=ignore-duplicates,return=minimal"
+        ? `resolution=${duplicateStrategy}-duplicates,return=minimal`
         : "return=minimal",
     },
     body: JSON.stringify(row),
