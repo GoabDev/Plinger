@@ -3,6 +3,7 @@ import { syncGitHubSubject, syncRepositoryIssues } from "../../../../lib/github/
 import { selectSupabaseRows } from "../../../../lib/supabase/server";
 import { createAuthClient } from "../../../../lib/supabase/auth-client";
 import { isAdmin } from "../../../../lib/supabase/auth-config";
+import { createHash, timingSafeEqual } from "node:crypto";
 
 export const runtime = "nodejs";
 
@@ -12,21 +13,44 @@ type InstallationEvent = { installation_github_id: number | null };
 type RepositoryRow = { full_name: string };
 
 export async function POST(request: Request) {
-  if (request.headers.get("sec-fetch-site") === "cross-site") {
-    return NextResponse.json({ error: "Not authorized" }, { status: 403 });
+  const authorization = request.headers.get("authorization");
+  let mode: "poll" | "full" = "full";
+  if (authorization !== null) {
+    const secret = process.env.PLINGER_SYNC_SECRET?.trim();
+    if (!secret) return NextResponse.json({ error: "Scheduled sync is not configured" }, { status: 503 });
+    const provided = authorization.startsWith("Bearer ") ? authorization.slice(7) : "";
+    const actualHash = createHash("sha256").update(provided).digest();
+    const expectedHash = createHash("sha256").update(secret).digest();
+    if (!provided || !timingSafeEqual(actualHash, expectedHash)) {
+      return NextResponse.json({ error: "Not authorized" }, { status: 401 });
+    }
+    let body: unknown;
+    try {
+      body = await request.json();
+    } catch {
+      return NextResponse.json({ error: "Invalid sync request" }, { status: 400 });
+    }
+    if (!body || typeof body !== "object" || !("mode" in body) || (body.mode !== "poll" && body.mode !== "full")) {
+      return NextResponse.json({ error: "Invalid sync mode" }, { status: 400 });
+    }
+    mode = body.mode;
+  } else {
+    if (request.headers.get("sec-fetch-site") === "cross-site") {
+      return NextResponse.json({ error: "Not authorized" }, { status: 403 });
+    }
+    const authClient = await createAuthClient();
+    if (!authClient) return NextResponse.json({ error: "Authentication unavailable" }, { status: 503 });
+    const { data: auth } = await authClient.auth.getUser();
+    if (!isAdmin(auth.user)) return NextResponse.json({ error: "Not authorized" }, { status: 403 });
   }
-  const authClient = await createAuthClient();
-  if (!authClient) return NextResponse.json({ error: "Authentication unavailable" }, { status: 503 });
-  const { data: auth } = await authClient.auth.getUser();
-  if (!isAdmin(auth.user)) return NextResponse.json({ error: "Not authorized" }, { status: 403 });
   if (!process.env.GITHUB_APP_ID || !(process.env.GITHUB_PRIVATE_KEY || process.env.GITHUB_PRIVATE_KEY_PATH)) {
     return NextResponse.json({ error: "GitHub App credentials are not configured" }, { status: 503 });
   }
 
-  const repositories = await selectSupabaseRows<RepositoryRow>({
+  const repositories = mode === "full" ? await selectSupabaseRows<RepositoryRow>({
     table: "repositories",
     query: { select: "full_name", disabled: "eq.false", order: "updated_at.desc", limit: "10" },
-  });
+  }) : { data: [] as RepositoryRow[] };
   if (repositories.skipped || repositories.error) return NextResponse.json({ error: "Could not load repositories" }, { status: 503 });
 
   const installationCache = new Map<string, number | null>();
@@ -93,9 +117,26 @@ export async function POST(request: Request) {
     }
   }
 
+  const linkCount = await selectSupabaseRows<LinkRow>({
+    table: "issue_pull_requests",
+    query: { select: "github_pull_request_id", limit: "0" },
+    count: "exact",
+  });
+  if (linkCount.skipped || linkCount.error || linkCount.count === undefined) {
+    return NextResponse.json({ error: "Could not count linked PRs" }, { status: 503 });
+  }
+  const pageCount = Math.ceil(linkCount.count / 20);
+  const offset = mode === "poll" && pageCount
+    ? (Math.floor(Date.now() / 900_000) % pageCount) * 20
+    : 0;
   const links = await selectSupabaseRows<LinkRow>({
     table: "issue_pull_requests",
-    query: { select: "github_pull_request_id", order: "updated_at.desc", limit: "20" },
+    query: {
+      select: "github_pull_request_id",
+      order: mode === "poll" ? "github_issue_id.asc,github_pull_request_id.asc" : "updated_at.desc",
+      limit: "20",
+      offset: String(offset),
+    },
   });
   if (links.skipped || links.error) return NextResponse.json({ error: "Could not load linked PRs" }, { status: 503 });
   const ids = [...new Set(links.data.map((link) => link.github_pull_request_id))];
@@ -115,7 +156,7 @@ export async function POST(request: Request) {
     }
   }
 
-  return NextResponse.json({ checked, failed: failures.length }, { status: failures.length ? 207 : 200 });
+  return NextResponse.json({ checked, failed: failures.length, mode }, { status: failures.length ? (authorization !== null ? 503 : 207) : 200 });
 }
 
 function parseGitHubUrl(value: string | null) {

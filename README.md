@@ -136,6 +136,31 @@ CI-only and review changes may not produce those webhooks; use **Sync GitHub**
 to check their latest status. The sync is intentionally bounded, so older
 records beyond the latest 12 issues per repository are not backfilled yet.
 
+## Automatic Sync
+
+The GitHub Actions workflow in `.github/workflows/sync-github.yml` calls the
+same protected sync endpoint. It polls a rotating batch of 20 linked PRs four
+times an hour and runs the bounded full sync once daily. Webhooks remain the
+primary path for immediate issue and PR changes, and **Sync GitHub** remains
+available for an on-demand full check. Scheduled runs may be delayed or missed
+by GitHub Actions, so this is periodic reconciliation rather than a guarantee
+of exact 15-minute freshness.
+
+Generate a dedicated secret:
+
+```powershell
+node -e "console.log(require('node:crypto').randomBytes(32).toString('base64url'))"
+```
+
+Set the same value as `PLINGER_SYNC_SECRET` in the Vercel Production environment
+and as a repository Actions secret named `PLINGER_SYNC_SECRET` on GitHub.
+Redeploy Vercel after adding its environment variable, then run the workflow
+manually from GitHub Actions with `mode=poll` and confirm its response reports
+`failed: 0`. Never commit the secret or use a personal access token for it.
+GitHub Actions scheduled workflows in public repositories can be disabled
+after 60 days without repository activity; check the Actions tab if scheduled
+sync stops running.
+
 Before the first production test:
 
 1. Apply the migration with `npm.cmd run supabase:push`.
