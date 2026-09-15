@@ -2226,6 +2226,49 @@ ul {
 .scouter-notice { padding: 10px 12px; margin-bottom: 16px; border: 1px solid #b9dec8; border-radius: 4px; background: #f0faf4; color: var(--green); font-size: 13px; }
 .scouter-notice.error { border-color: #ecc2bf; background: #fff4f2; color: #9d332b; }
 .scouter-loading { padding: 60px 20px; text-align: center; color: var(--muted); }
+.scouter-workspace .workspace-main { padding-bottom: 48px; }
+.scouter-workspace .workspace-label > div { min-width: 0; }
+.scouter-workspace .workspace-label strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.scouter-workspace .workspace-avatar { flex-shrink: 0; overflow: hidden; }
+.scouter-workspace .scouter-band { margin-top: 4px; }
+.scouter-workspace .scouter-overview-section { margin-top: 30px; }
+.scouter-workspace .scouter-work-grid { gap: 30px; }
+.scouter-workspace .scouter-work-list { max-height: none; }
+.scouter-workspace .scouter-work-list li { min-height: 64px; padding: 14px 0; }
+.scouter-workspace .scouter-work-list span { padding: 4px 7px; background: #eef1f5; border-radius: 4px; }
+.scouter-workspace .scouter-form { max-width: 650px; gap: 12px; }
+.scouter-workspace .scouter-form input { min-height: 44px; }
+.scouter-workspace .scouter-proof-list { margin-top: 0; }
+.scouter-workspace .scouter-proof-list li { min-height: 58px; }
+.scouter-workspace .scouter-loading { display: flex; align-items: center; flex-direction: column; gap: 20px; }
+.scouter-overview-metrics { border-radius: 6px; }
+.scouter-setup-list button { display: flex; align-items: center; gap: 16px; width: 100%; padding: 20px 0; border: 0; border-bottom: 1px solid var(--line); background: transparent; text-align: left; }
+.scouter-setup-list button:hover { background: #f1f2f6; }
+.scouter-setup-list button > span:first-of-type { flex: 1; min-width: 0; }
+.scouter-setup-list strong, .scouter-setup-list small { display: block; }
+.scouter-setup-list strong { font-size: 14px; font-weight: 600; }
+.scouter-setup-list small { margin-top: 5px; color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
+.scouter-empty-line { padding: 22px 0; color: var(--muted); font-size: 13px; }
+.scouter-work-toolbar { display: flex; align-items: center; gap: 12px; margin-bottom: 24px; }
+.scouter-work-toolbar label { display: flex; flex: 1; align-items: center; gap: 10px; padding: 0 12px; max-width: 480px; border: 1px solid #d7d9df; border-radius: 5px; background: #fff; }
+.scouter-work-toolbar input { min-width: 0; width: 100%; height: 42px; border: 0; background: transparent; }
+.scouter-work-toolbar select { min-height: 42px; padding: 0 12px; border: 1px solid #d7d9df; border-radius: 5px; background: #fff; }
+.scouter-topbar-login { max-width: 180px; overflow: hidden; text-overflow: ellipsis; font-size: 12px; color: var(--muted); }
+.scouter-mobile-navigation, .scouter-mobile-signout { display: none; }
+@media (max-width: 640px) {
+  .scouter-mobile-navigation:not([hidden]) { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; padding: 12px 18px; background: #19191d; color: #aeafb8; }
+  .scouter-mobile-navigation .nav-item { position: relative; font-size: 13px; padding: 0 10px; gap: 8px; }
+  .scouter-mobile-signout { display: block; }
+  .scouter-topbar-login { max-width: 100px; }
+  .scouter-workspace .page-heading { flex-wrap: wrap; }
+  .scouter-workspace .heading-actions { flex-wrap: wrap; }
+  .scouter-workspace .scouter-work-grid { grid-template-columns: 1fr; }
+  .scouter-work-toolbar { flex-wrap: wrap; }
+  .scouter-work-toolbar label { flex-basis: 100%; }
+  .scouter-workspace .scouter-bank-form { grid-template-columns: 1fr; }
+  .scouter-setup-list button { gap: 10px; }
+  .scouter-setup-list button > svg:last-child { display: none; }
+}
 .scouter-admin-private { max-height: 260px; overflow-y: auto; padding: 20px 28px; border-bottom: 1px solid var(--line); background: #fbfbfc; }
 .scouter-admin-private-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; }
 .scouter-admin-private h3 { font-size: 14px; }
