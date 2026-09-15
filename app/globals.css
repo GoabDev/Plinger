@@ -2133,6 +2133,8 @@ ul {
 .scouter-directory-name small { color: var(--muted); font-size: 11px; }
 .scouter-connection-dot { width: 7px; height: 7px; flex: 0 0 7px; border-radius: 50%; background: #21a36a; }
 .scouter-connection-dot.inactive { background: #a9acb5; }
+.scouter-account-indicators { display: inline-flex; align-items: center; gap: 6px; flex-shrink: 0; }
+.scouter-authenticated-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--purple); }
 .scouters-directory-count { padding: 12px 18px; border-top: 1px solid var(--line); color: var(--muted); font-size: 12px; }
 .scouters-profile { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
 .scouters-profile > :not(.scouter-tab-panel) { flex-shrink: 0; }
@@ -2219,6 +2221,14 @@ ul {
 .scouter-bank-form { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
 .scouter-bank-form label { display: grid; gap: 7px; }
 .scouter-bank-form button { grid-column: 1 / -1; }
+.scouter-form-actions { display: flex; flex-wrap: wrap; gap: 10px; grid-column: 1 / -1; }
+.scouter-saved-bank { max-width: 750px; }
+.scouter-saved-bank dl { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px; margin: 0 0 24px; }
+.scouter-saved-bank dt { margin-bottom: 8px; color: var(--muted); font-size: 12px; }
+.scouter-saved-bank dd { margin: 0; font-size: 14px; font-weight: 600; overflow-wrap: anywhere; }
+.scouter-saved-pat { display: flex; flex-wrap: wrap; align-items: center; gap: 20px; }
+.scouter-saved-pat > span { display: inline-flex; align-items: center; gap: 8px; color: var(--green); font-size: 14px; }
+@media (max-width: 640px) { .scouter-saved-bank dl { grid-template-columns: 1fr; gap: 18px; } }
 .scouter-address { display: flex; align-items: center; gap: 10px; max-width: 740px; margin-top: 14px; }
 .scouter-address code { flex: 1; min-width: 0; padding: 12px; border: 1px solid var(--line); border-radius: 4px; background: #fff; font-size: 13px; overflow-wrap: anywhere; user-select: all; }
 .scouter-address button { flex-shrink: 0; }
@@ -2250,9 +2260,15 @@ ul {
 .scouter-setup-list small { margin-top: 5px; color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
 .scouter-empty-line { padding: 22px 0; color: var(--muted); font-size: 13px; }
 .scouter-work-toolbar { display: flex; align-items: center; gap: 12px; margin-bottom: 24px; }
-.scouter-work-toolbar label { display: flex; flex: 1; align-items: center; gap: 10px; padding: 0 12px; max-width: 480px; border: 1px solid #d7d9df; border-radius: 5px; background: #fff; }
-.scouter-work-toolbar input { min-width: 0; width: 100%; height: 42px; border: 0; background: transparent; }
-.scouter-work-toolbar select { min-height: 42px; padding: 0 12px; border: 1px solid #d7d9df; border-radius: 5px; background: #fff; }
+.ui-input { display: flex; min-width: 0; width: 100%; height: 42px; padding: 8px 12px; border: 1px solid #d7d9df; border-radius: 5px; background: #fff; color: var(--ink); font: inherit; box-shadow: 0 1px 2px #00000005; transition: border-color 120ms, box-shadow 120ms; }
+.ui-input::placeholder { color: var(--muted); }
+.ui-input:focus-visible { border-color: var(--purple); outline: none; box-shadow: 0 0 0 3px #8250df26; }
+.ui-input:disabled { cursor: not-allowed; opacity: 0.5; }
+.ui-input[aria-invalid="true"] { border-color: #b9493e; }
+.scouter-work-search { position: relative; flex: 1; max-width: 480px; min-width: 0; }
+.scouter-work-search > svg { position: absolute; left: 12px; top: 13px; pointer-events: none; color: var(--muted); }
+.scouter-work-search .ui-input { padding-left: 38px; }
+.scouter-work-status { width: 145px; min-height: 42px; background: #fff; }
 .scouter-topbar-login { max-width: 180px; overflow: hidden; text-overflow: ellipsis; font-size: 12px; color: var(--muted); }
 .scouter-mobile-navigation, .scouter-mobile-signout { display: none; }
 @media (max-width: 640px) {
@@ -2264,7 +2280,7 @@ ul {
   .scouter-workspace .heading-actions { flex-wrap: wrap; }
   .scouter-workspace .scouter-work-grid { grid-template-columns: 1fr; }
   .scouter-work-toolbar { flex-wrap: wrap; }
-  .scouter-work-toolbar label { flex-basis: 100%; }
+  .scouter-work-search { flex-basis: 100%; }
   .scouter-workspace .scouter-bank-form { grid-template-columns: 1fr; }
   .scouter-setup-list button { gap: 10px; }
   .scouter-setup-list button > svg:last-child { display: none; }

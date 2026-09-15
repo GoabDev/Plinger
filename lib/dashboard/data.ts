@@ -148,7 +148,7 @@ export async function getDashboardData() {
         limit: "6",
       },
     }),
-    getScouterDirectory(),
+    getScouterDirectory(true),
   ]);
   const openPullRequests = {
     ...linkedPullRequests,

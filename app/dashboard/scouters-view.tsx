@@ -122,6 +122,7 @@ export default function ScoutersView({
           <Users size={18} aria-hidden="true" />
         </div>
         {historyUnavailable && <p className="scouters-history-warning" role="status">Removed-installation history is unavailable.</p>}
+        {scouters.some((scouter) => scouter.has_authenticated === null) && <p className="scouters-history-warning" role="status">Plinger sign-in status is unavailable.</p>}
         <label className="scouters-search">
           <Search size={16} aria-hidden="true" />
           <input
@@ -171,7 +172,10 @@ export default function ScoutersView({
                   <strong>{scouter.account_login}</strong>
                   <small>{connectionLabel(scouter)}</small>
                 </span>
-                <span className={`scouter-connection-dot ${scouter.uninstalled_at || scouter.suspended_at ? "inactive" : ""}`} aria-hidden="true" />
+                <span className="scouter-account-indicators">
+                  <span className={`scouter-connection-dot ${scouter.uninstalled_at || scouter.suspended_at ? "inactive" : ""}`} aria-hidden="true" />
+                  {scouter.has_authenticated && <span className="scouter-authenticated-dot" role="img" aria-label="Has signed into Plinger" title="Has signed into Plinger" />}
+                </span>
               </button>
             ))
           )}

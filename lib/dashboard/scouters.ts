@@ -1,6 +1,8 @@
+import "server-only";
 import { selectSupabaseRows } from "../supabase/server";
 import { listGitHubAppInstallations } from "../github/api";
 import type { IssueRow, PullRequestRow, RepositoryRow, WebhookEventRow } from "./data";
+import { createClient } from "@supabase/supabase-js";
 
 export type ScouterRow = {
   id: string;
@@ -10,6 +12,7 @@ export type ScouterRow = {
   suspended_at: string | null;
   uninstalled_at: string | null;
   created_at: string;
+  has_authenticated?: boolean | null;
 };
 
 export type ScouterList<T> = { data: T[]; count: number };
@@ -32,9 +35,30 @@ const pullRequestSelect = "id,github_pull_request_id,github_pull_request_number,
 const repositorySelect = "id,github_repository_id,owner_login,name,full_name,private,default_branch,archived,disabled,updated_at";
 const eventSelect = "id,delivery_id,event,action,repository_full_name,sender_login,received_at";
 
-export async function getScouterDirectory() {
+async function getAuthenticatedGitHubAccounts() {
+  const url = process.env.SUPABASE_URL;
+  const key = process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !key) throw new Error("Authentication directory unavailable");
+  const client = createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
+  const accounts = new Set<string>();
+  for (let page = 1; ; page++) {
+    const { data, error } = await client.auth.admin.listUsers({ page, perPage: 1000 });
+    if (error) throw new Error("Authentication directory unavailable");
+    for (const user of data.users) {
+      if (!user.last_sign_in_at) continue;
+      for (const identity of user.identities ?? []) {
+        if (identity.provider !== "github") continue;
+        const id = String(identity.identity_data?.sub ?? identity.id);
+        if (/^\d+$/.test(id)) accounts.add(id);
+      }
+    }
+    if (data.users.length < 1000) return accounts;
+  }
+}
+
+export async function getScouterDirectory(includeAuthentication = false) {
   try {
-    const [current, historical] = await Promise.all([
+    const [current, historical, authenticated] = await Promise.all([
       listGitHubAppInstallations(),
       selectSupabaseRows<ScouterRow>({
         table: "github_installations",
@@ -53,6 +77,7 @@ export async function getScouterDirectory() {
         skipped: false,
         count: undefined,
       })),
+      includeAuthentication ? getAuthenticatedGitHubAccounts().catch(() => null) : null,
     ]);
     const historyUnavailable = Boolean(historical.error || historical.skipped || historical.count === undefined);
     const byInstallation = new Map<number, ScouterRow>(
@@ -70,7 +95,10 @@ export async function getScouterDirectory() {
         created_at: installation.created_at,
       });
     }
-    return { data: [...byInstallation.values()], count: byInstallation.size, historyUnavailable };
+    const data = [...byInstallation.values()].map((row) => includeAuthentication
+      ? { ...row, has_authenticated: authenticated ? authenticated.has(String(row.account_id)) : null }
+      : row);
+    return { data, count: byInstallation.size, historyUnavailable };
   } catch (error) {
     console.error("[scouters:directory:failed]", error);
     return { data: [] as ScouterRow[], error: "Scouter directory unavailable" };

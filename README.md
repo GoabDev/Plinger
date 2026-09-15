@@ -221,3 +221,9 @@ routes. Uploaded proofs are reviewed as pending, confirmed, or rejected.
 Issue assignment totals use the latest stored assignee list, not a historical
 assignment ledger. An issue unassigned later will no longer count for that
 scouter.
+
+The admin directory shows a purple dot beside installation status when a matching
+GitHub identity has a recorded Supabase Auth sign-in. This includes existing
+users and means they have signed into Plinger, not that they are currently online.
+The server checks paginated Auth records and returns only the matching status;
+no new migration is required for this indicator.
