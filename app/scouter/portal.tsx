@@ -50,6 +50,12 @@ export default function ScouterPortal() {
 
   useEffect(() => { load().catch((cause) => setError(cause.message)); }, [load]);
 
+  useEffect(() => {
+    if (!data || (!error && !message)) return;
+    const timeout = window.setTimeout(() => { setError(""); setMessage(""); }, 6000);
+    return () => window.clearTimeout(timeout);
+  }, [data, error, message]);
+
   async function refresh() {
     setRefreshing(true); setError("");
     try { await load(); } catch (cause) { setError(cause instanceof Error ? cause.message : "Could not refresh your workspace"); }

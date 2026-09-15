@@ -81,10 +81,14 @@ export async function readProofs(accountId: number) {
   return data as WithdrawalProof[];
 }
 
+export class PatEncryptionConfigurationError extends Error {
+  constructor() { super("PAT encryption key must be 32 bytes in base64"); }
+}
+
 function patKey() {
   const raw = process.env.PLINGER_PAT_ENCRYPTION_KEY;
   const key = raw ? Buffer.from(raw, "base64") : null;
-  if (!key || key.length !== 32) throw new Error("PAT encryption key must be 32 bytes in base64");
+  if (!key || key.length !== 32) throw new PatEncryptionConfigurationError();
   return key;
 }
 

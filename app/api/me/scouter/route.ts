@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { currentScouter, encryptPat, readPrivateProfile, readProofs, safeProfile, sameOrigin, serviceClient } from "../../../../lib/scouter/portal";
+import { currentScouter, encryptPat, PatEncryptionConfigurationError, readPrivateProfile, readProofs, safeProfile, sameOrigin, serviceClient } from "../../../../lib/scouter/portal";
 import { getScouterProfile } from "../../../../lib/dashboard/scouters";
 
 export const runtime = "nodejs";
@@ -58,6 +58,9 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ ok: true }, { headers: { "Cache-Control": "private, no-store" } });
   } catch (error) {
     console.error("[scouter:update:failed]", error);
+    if (error instanceof PatEncryptionConfigurationError) {
+      return NextResponse.json({ error: "PAT storage is not configured. Please contact an admin." }, { status: 503 });
+    }
     return NextResponse.json({ error: "Could not save your details" }, { status: 503 });
   }
 }

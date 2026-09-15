@@ -16,6 +16,11 @@ export default function ScouterAdminDetails({ profile, onRefresh }: { profile: A
   const [copied, setCopied] = useState(false);
   const login = profile.scouter.account_login;
   useEffect(() => { setPat(""); setError(""); setCopied(false); }, [login]);
+  useEffect(() => {
+    if (!error) return;
+    const timeout = window.setTimeout(() => setError(""), 6000);
+    return () => window.clearTimeout(timeout);
+  }, [error]);
 
   async function reveal() {
     setBusy("pat"); setError("");

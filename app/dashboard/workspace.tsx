@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
   Activity,
@@ -126,6 +126,11 @@ export default function DashboardWorkspace({
   const [syncing, setSyncing] = useState(false);
   const [syncMessage, setSyncMessage] = useState("");
   const [syncFailed, setSyncFailed] = useState(false);
+  useEffect(() => {
+    if (!syncMessage) return;
+    const timeout = window.setTimeout(() => setSyncMessage(""), 6000);
+    return () => window.clearTimeout(timeout);
+  }, [syncMessage]);
   const title = navigation.find((item) => item.id === view)!.label;
   const match = (...values: (string | null | undefined)[]) =>
     values.join(" ").toLowerCase().includes(query.trim().toLowerCase());
