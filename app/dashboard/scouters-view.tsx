@@ -18,6 +18,7 @@ import type { IssueRow, PullRequestRow, WebhookEventRow } from "../../lib/dashbo
 import type { ScouterProfile, ScouterRow } from "../../lib/dashboard/scouters";
 import { prStatus } from "../../lib/dashboard/status";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
+import ScouterAdminDetails, { type AdminProfile } from "./scouter-admin-details";
 
 type ProfileTab = "issues" | "pull-requests" | "activity" | "repositories";
 type IssueFilter = "all" | "open" | "closed";
@@ -46,7 +47,7 @@ export default function ScoutersView({
   const [tab, setTab] = useState<ProfileTab>("issues");
   const [issueFilter, setIssueFilter] = useState<IssueFilter>("all");
   const [prFilter, setPrFilter] = useState<PullRequestFilter>("all");
-  const [profile, setProfile] = useState<ScouterProfile | null>(null);
+  const [profile, setProfile] = useState<AdminProfile | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [retry, setRetry] = useState(0);
@@ -81,7 +82,7 @@ export default function ScoutersView({
       .then(async (response) => {
         const body = await response.json();
         if (!response.ok) throw new Error(body.error ?? "Scouter activity is unavailable");
-        return body as ScouterProfile;
+        return body as AdminProfile;
       })
       .then((data) => setProfile(data))
       .catch((cause) => {
@@ -206,6 +207,7 @@ export default function ScoutersView({
               </a>
             </div>
 
+            <ScouterAdminDetails profile={profile} onRefresh={() => setRetry((value) => value + 1)} />
             <div className="scouter-metrics" aria-label="Scouter work totals">
               <Metric label="Open issues" value={profile.openIssues.count} icon={CircleDot} onClick={() => { setTab("issues"); setIssueFilter("open"); }} />
               <Metric label="Closed issues" value={profile.closedIssues.count} icon={CircleDot} onClick={() => { setTab("issues"); setIssueFilter("closed"); }} />

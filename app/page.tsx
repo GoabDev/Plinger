@@ -5,7 +5,6 @@ import {
   ArrowUpRight,
   BookOpen,
   CircleDot,
-  CodeXml as Github,
   GitMerge,
   GitPullRequest,
   Radio,
@@ -27,7 +26,7 @@ export default function Home() {
             GitHub <ArrowUpRight size={14} />
           </a>
         </div>
-        <Link className="button button-light" href="/dashboard">
+        <Link className="button button-light" href="/scouter/login">
           Open dashboard <ArrowRight size={16} />
         </Link>
       </nav>
@@ -47,14 +46,14 @@ export default function Home() {
           forward. All together, without the tab hopping.
         </p>
         <div className="hero-actions">
-          <Link className="button button-light" href="/dashboard">
+          <Link className="button button-light" href="/scouter/login">
             Open your dashboard <ArrowRight size={17} />
           </Link>
           <a
             className="button button-dark-outline"
             href="https://github.com/apps/plinger/installations/new"
           >
-            <Github size={17} /> Connect GitHub
+            <img src="/github-mark-white.svg" width={17} height={17} alt="" aria-hidden="true" /> Connect GitHub
           </a>
         </div>
         <a className="hero-scroll" href="#workflow">
@@ -190,7 +189,7 @@ export default function Home() {
       <footer className="landing-footer">
         <Brand />
         <span>A clearer view of your GitHub work.</span>
-        <Link href="/dashboard">
+        <Link href="/scouter/login">
           Let&apos;s see what&apos;s happening <ArrowRight size={16} />
         </Link>
       </footer>

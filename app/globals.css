@@ -748,6 +748,14 @@ ul {
   width: 100%;
   height: 44px;
 }
+.scouter-login-shell .login-content-inner { width: min(100%, 440px); }
+.scouter-login-shell .login-intro { margin-top: 14px; line-height: 1.5; }
+.scouter-oauth-form { margin-top: 30px; }
+.scouter-oauth-form .login-submit { min-height: 54px; height: auto; gap: 12px; padding: 14px 20px; }
+.scouter-oauth-form img { display: block; flex: 0 0 20px; }
+.scouter-login-shell { position: relative; }
+.scouter-login-shell .scouter-admin-link { position: absolute; right: clamp(24px, 4vw, 54px); bottom: clamp(22px, 3vw, 42px); margin: 0; color: #8a8d98; font-size: 12px; }
+.scouter-login-shell .scouter-admin-link:hover { color: var(--ink); }
 @media (max-width: 700px) {
   .login-shell {
     grid-template-columns: 1fr;
@@ -764,6 +772,7 @@ ul {
     align-items: flex-start;
     padding: 64px 24px;
   }
+  .scouter-login-shell .login-content { padding: 72px 24px 100px; }
 }
 .sidebar-status {
   display: flex;
@@ -2183,6 +2192,63 @@ ul {
 .scouter-empty .button { margin-top: 16px; }
 .scouters-loading { flex-direction: row; gap: 10px; font-size: 13px; }
 .scouter-result-limit { margin-top: 16px; color: var(--muted); font-size: 12px; }
+.scouter-admin-link { display: inline-block; margin-top: 18px; color: var(--muted); font-size: 13px; }
+.scouter-shell { min-height: 100dvh; background: var(--canvas); }
+.scouter-topbar { display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: 64px; padding: 12px max(18px, calc((100vw - 1100px) / 2)); border-bottom: 1px solid var(--line); background: #fff; }
+.scouter-main { max-width: 1100px; margin: 0 auto; padding: 28px 20px 64px; }
+.scouter-page-heading { display: flex; justify-content: space-between; align-items: center; gap: 20px; padding-bottom: 25px; }
+.scouter-page-heading h1 { margin-top: 5px; font-size: 28px; overflow-wrap: anywhere; }
+.scouter-page-heading p:last-child { margin-top: 5px; color: var(--muted); }
+.scouter-band { padding: 23px 0 27px; border-top: 1px solid var(--line); }
+.scouter-band-heading { display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 8px 20px; margin-bottom: 18px; }
+.scouter-band-heading h2, .scouter-admin-private h3 { display: flex; align-items: center; gap: 8px; font-size: 17px; font-weight: 650; }
+.scouter-band-heading > span { color: var(--muted); font-size: 12px; }
+.scouter-work-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 40px; }
+.scouter-work-grid h3 { margin-bottom: 10px; font-size: 14px; }
+.scouter-work-list { max-height: 310px; overflow-y: auto; }
+.scouter-work-list li, .scouter-proof-list li, .scouter-admin-proofs li { display: flex; align-items: center; justify-content: space-between; gap: 14px; min-height: 42px; padding: 8px 0; border-bottom: 1px solid var(--line); font-size: 13px; }
+.scouter-work-list a, .scouter-proof-list a, .scouter-admin-proofs a { display: inline-flex; align-items: center; gap: 4px; min-width: 0; overflow-wrap: anywhere; font-weight: 600; }
+.scouter-work-list a:hover, .scouter-proof-list a:hover, .scouter-admin-proofs a:hover { color: var(--purple); }
+.scouter-work-list span, .scouter-proof-list span, .scouter-admin-proofs span, .scouter-proof-list time, .scouter-admin-proofs time { flex-shrink: 0; color: var(--muted); font-size: 12px; text-transform: capitalize; }
+.scouter-form { display: grid; gap: 9px; max-width: 580px; }
+.scouter-form label { font-size: 12px; font-weight: 600; }
+.scouter-form input, .scouter-admin-pat input { width: 100%; min-height: 38px; padding: 8px 10px; border: 1px solid #d7d9df; border-radius: 4px; background: #fff; }
+.scouter-form input[type="file"] { padding: 7px; }
+.scouter-form button { justify-self: start; margin-top: 6px; }
+.scouter-consent, .scouter-destination-copy { color: var(--muted); font-size: 13px; line-height: 1.5; }
+.scouter-bank-form { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.scouter-bank-form label { display: grid; gap: 7px; }
+.scouter-bank-form button { grid-column: 1 / -1; }
+.scouter-address { display: flex; align-items: center; gap: 10px; max-width: 740px; margin-top: 14px; }
+.scouter-address code { flex: 1; min-width: 0; padding: 12px; border: 1px solid var(--line); border-radius: 4px; background: #fff; font-size: 13px; overflow-wrap: anywhere; user-select: all; }
+.scouter-address button { flex-shrink: 0; }
+.scouter-proof-list { margin-top: 20px; }
+.scouter-notice { padding: 10px 12px; margin-bottom: 16px; border: 1px solid #b9dec8; border-radius: 4px; background: #f0faf4; color: var(--green); font-size: 13px; }
+.scouter-notice.error { border-color: #ecc2bf; background: #fff4f2; color: #9d332b; }
+.scouter-loading { padding: 60px 20px; text-align: center; color: var(--muted); }
+.scouter-admin-private { max-height: 260px; overflow-y: auto; padding: 20px 28px; border-bottom: 1px solid var(--line); background: #fbfbfc; }
+.scouter-admin-private-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; }
+.scouter-admin-private h3 { font-size: 14px; }
+.scouter-admin-private p { margin-top: 10px; color: var(--muted); font-size: 12px; }
+.scouter-admin-private dl { display: grid; grid-template-columns: 100px minmax(0, 1fr); gap: 7px; margin: 10px 0 0; font-size: 12px; }
+.scouter-admin-private dt { color: var(--muted); }
+.scouter-admin-private dd { min-width: 0; margin: 0; overflow-wrap: anywhere; }
+.scouter-admin-pat { display: flex; gap: 6px; align-items: center; margin-top: 12px; }
+.scouter-admin-pat input { min-width: 0; flex: 1; font-family: monospace; }
+.scouter-admin-proofs { margin-top: 20px; }
+.scouter-admin-proofs ul { margin-top: 8px; }
+.scouter-admin-proofs li { flex-wrap: wrap; }
+.scouter-admin-proofs li > div { display: flex; gap: 5px; }
+.scouter-admin-proofs .button { min-height: 28px; padding: 4px 8px; font-size: 11px; }
+@media (max-width: 700px) {
+  .scouter-main { padding: 22px 18px 50px; }
+  .scouter-page-heading { align-items: flex-start; }
+  .scouter-page-heading h1 { font-size: 23px; }
+  .scouter-work-grid, .scouter-admin-private-grid { grid-template-columns: 1fr; gap: 22px; }
+  .scouter-bank-form { grid-template-columns: 1fr; }
+  .scouter-admin-private { padding: 18px; }
+  .scouter-proof-list li, .scouter-admin-proofs li { flex-wrap: wrap; }
+}
 @media (max-width: 1150px) {
   .scouters-layout { grid-template-columns: minmax(210px, 250px) minmax(0, 1fr); }
   .scouter-metrics { grid-template-columns: repeat(3, minmax(0, 1fr)); }

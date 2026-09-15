@@ -109,8 +109,8 @@ To enable the admin dashboard:
 
 1. In this project's Supabase Authentication dashboard, create and confirm the
    admin user with the email in `PLINGER_ADMIN_EMAIL`.
-2. Turn off public signups under Authentication settings. Only the confirmed
-   admin email can access the dashboard, even if other Auth users exist.
+2. Enable GitHub OAuth signups for scouters. Only the confirmed admin email can
+   access the dashboard, even when other Auth users exist.
 3. Add the same variables to `.env.local` for local development and to Vercel
    for production. Redeploy after changing Vercel environment variables.
 
@@ -127,7 +127,8 @@ Set `GITHUB_APP_ID` and `GITHUB_PRIVATE_KEY` in Vercel. The private key must be
 the complete PEM contents from the Plinger GitHub App settings. Keep it
 server-side and never commit it. Locally, `GITHUB_PRIVATE_KEY_PATH` may point
 to the PEM file instead. GitHub installation tokens are generated on demand;
-users do not need to give Plinger a personal access token.
+users do not need to give Plinger a personal access token for monitoring.
+The scouter portal separately accepts a PAT for admin CLI work on assigned issues.
 
 Issue and PR webhooks reconcile GitHub's closing-keyword and manually linked
 relationships. The dashboard shows recent closed issues and merge states only
@@ -197,8 +198,26 @@ owned by it. Counts cover all stored matching records; each detail list shows
 only its most recent 20 records (30 for activity). Closed PRs exclude merged
 PRs, so the two totals do not overlap. Assigned issue rows also show recorded
 linked PR statuses, including conflicts and closed-without-merge states, even
-when another user authored the PR. Scouters does not request or store a user's
-personal access token.
+when another user authored the PR. Scouters can sign in with GitHub at
+`/scouter/login` and manage their PAT, bank details, and Drip Wave withdrawal
+proof. Their account is matched to a personal GitHub App installation by the
+GitHub account ID in the OAuth identity. The admin detail view shows uploaded
+details, supports proof review, and can reveal/copy the actual PAT. Each reveal
+is recorded in `scouter_pat_access_log`.
+
+Apply `supabase/migrations/20260915060947_scouter_portal.sql` before using the
+portal. Enable the GitHub provider in Supabase Auth with a separate GitHub OAuth
+App, and add `https://YOUR-DOMAIN/auth/callback` to the Supabase redirect allow
+list. The GitHub OAuth App callback points to the Supabase Auth callback URL
+shown in the provider settings. Allow OAuth signups for scouters; dashboard
+admin access is still restricted by `PLINGER_ADMIN_EMAIL`.
+
+Set `PLINGER_PAT_ENCRYPTION_KEY` in the server environment to a base64-encoded
+32-byte random key, for example from
+`node -e "console.log(require('node:crypto').randomBytes(32).toString('base64'))"`.
+Keep this key stable: changing it makes already uploaded PATs unreadable.
+The proof bucket is private and files are served only through authenticated
+routes. Uploaded proofs are reviewed as pending, confirmed, or rejected.
 Issue assignment totals use the latest stored assignee list, not a historical
 assignment ledger. An issue unassigned later will no longer count for that
 scouter.

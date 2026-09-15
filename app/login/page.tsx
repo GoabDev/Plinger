@@ -34,6 +34,7 @@ export default async function Login() {
           <h1>Welcome back</h1>
           <p className="login-intro">Sign in to your dashboard.</p>
           <LoginForm />
+          <a className="scouter-admin-link" href="/scouter/login">Scouter sign in with GitHub</a>
         </div>
       </div>
     </main>
