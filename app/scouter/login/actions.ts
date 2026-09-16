@@ -16,3 +16,9 @@ export async function signInWithGitHub() {
   if (error || !data.url) redirect("/scouter/login?error=oauth");
   redirect(data.url);
 }
+
+export async function signOutScouter() {
+  const auth = await createAuthClient();
+  if (auth) await auth.auth.signOut();
+  redirect("/scouter/login");
+}
