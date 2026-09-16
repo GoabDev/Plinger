@@ -199,12 +199,14 @@ export default function DashboardWorkspace({
     setSyncMessage("");
     try {
       const response = await fetch("/api/github/sync", { method: "POST" });
-      const result = (await response.json()) as { checked?: number; failed?: number; error?: string };
+      const result = (await response.json()) as { checked?: number; failed?: number; skipped?: number; error?: string };
       if (!response.ok) throw new Error(result.error ?? "GitHub sync failed");
       setSyncFailed(Boolean(result.failed));
       setSyncMessage(
         result.failed
           ? `Checked ${result.checked ?? 0} records; ${result.failed} could not be checked.`
+          : result.skipped
+            ? `Checked ${result.checked ?? 0} records; ${result.skipped} unavailable repositories were disabled.`
           : `Checked ${result.checked ?? 0} recent issues and linked pull requests.`,
       );
       startTransition(() => router.refresh());

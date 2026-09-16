@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { syncGitHubSubject, syncRepositoryIssues } from "../../../../lib/github/monitor";
-import { selectSupabaseRows } from "../../../../lib/supabase/server";
+import { selectSupabaseRows, updateSupabaseRows } from "../../../../lib/supabase/server";
 import { createAuthClient } from "../../../../lib/supabase/auth-client";
 import { isAdmin } from "../../../../lib/supabase/auth-config";
 import { createHash, timingSafeEqual } from "node:crypto";
@@ -55,6 +55,7 @@ export async function POST(request: Request) {
 
   const installationCache = new Map<string, number | null>();
   const failures: string[] = [];
+  const skipped: string[] = [];
   let checked = 0;
   async function getInstallationId(fullName: string) {
       let installationId = installationCache.get(fullName);
@@ -94,6 +95,10 @@ export async function POST(request: Request) {
       if (!installationId) throw new Error("No GitHub App installation found");
       checked += await syncRepositoryIssues(installationId, fullName);
     } catch (error) {
+      if (await disableUnavailableRepository(fullName, error)) {
+        skipped.push(fullName);
+        return;
+      }
       console.error("[github:sync:failed]", { repository: fullName, error });
       failures.push(fullName);
     }
@@ -112,6 +117,10 @@ export async function POST(request: Request) {
       await syncGitHubSubject({ type: "pull_request", installationId, fullName: parsed.fullName, number: parsed.number });
       checked++;
     } catch (error) {
+      if (await disableUnavailableRepository(parsed.fullName, error)) {
+        skipped.push(parsed.fullName);
+        return;
+      }
       console.error("[github:sync:failed]", { repository: parsed.fullName, error });
       failures.push(parsed.fullName);
     }
@@ -156,7 +165,34 @@ export async function POST(request: Request) {
     }
   }
 
-  return NextResponse.json({ checked, failed: failures.length, mode }, { status: failures.length ? (authorization !== null ? 503 : 207) : 200 });
+  return NextResponse.json(
+    { checked, failed: failures.length, skipped: [...new Set(skipped)].length, mode },
+    { status: failures.length ? (authorization !== null ? 503 : 207) : 200 },
+  );
+}
+
+async function disableUnavailableRepository(fullName: string, error: unknown) {
+  if (!isUnavailableRepositoryError(error)) return false;
+  const result = await updateSupabaseRows({
+    table: "repositories",
+    query: { full_name: `eq.${fullName}` },
+    row: { disabled: true, updated_at: new Date().toISOString() },
+  });
+  if (!result.ok || result.skipped) {
+    console.error("[github:sync:disable-failed]", { repository: fullName, error: result.error });
+    return false;
+  }
+  console.warn("[github:sync:disabled-repository]", { repository: fullName, reason: error instanceof Error ? error.message : String(error) });
+  return true;
+}
+
+function isUnavailableRepositoryError(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error);
+  return (
+    message.includes("No GitHub App installation found") ||
+    message.includes("is unavailable to this installation") ||
+    message.includes("GitHub installation token: 404")
+  );
 }
 
 function parseGitHubUrl(value: string | null) {

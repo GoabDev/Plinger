@@ -116,6 +116,34 @@ export async function deleteSupabaseRows({
   return response.ok ? { ok: true } : { ok: false, error: await response.text() };
 }
 
+export async function updateSupabaseRows({
+  table,
+  query,
+  row,
+}: {
+  table: string;
+  query: Record<string, string>;
+  row: Record<string, unknown>;
+}): Promise<SupabaseWriteResult> {
+  const supabaseUrl = process.env.SUPABASE_URL;
+  const secretKey = getSupabaseSecretKey();
+  if (!supabaseUrl || !secretKey) return { ok: true, skipped: true };
+
+  const url = new URL(`/rest/v1/${table}`, supabaseUrl);
+  for (const [key, value] of Object.entries(query)) url.searchParams.set(key, value);
+  const response = await fetch(url, {
+    method: "PATCH",
+    headers: {
+      apikey: secretKey,
+      authorization: `Bearer ${secretKey}`,
+      "content-type": "application/json",
+      prefer: "return=minimal",
+    },
+    body: JSON.stringify(row),
+  });
+  return response.ok ? { ok: true } : { ok: false, error: await response.text() };
+}
+
 async function writeSupabaseRow({
   table,
   row,
