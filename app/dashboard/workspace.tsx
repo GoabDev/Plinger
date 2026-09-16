@@ -575,6 +575,19 @@ export default function DashboardWorkspace({
                       : "Recently updated issues and pull requests"
                   }
                 />
+                {view !== "overview" && (
+                  <WorkStats
+                    active={view}
+                    items={[
+                      { id: "issues", label: "Open issues", value: issues.length, filtered: filteredIssues.length, icon: CircleDot, tone: "green" },
+                      { id: "closed-issues", label: "Closed issues", value: closedIssues.length, filtered: filteredClosedIssues.length, icon: Check, tone: "purple" },
+                      { id: "pull-requests", label: "Pull requests", value: pullRequests.length, filtered: filteredPrs.length, icon: GitPullRequest, tone: "blue" },
+                      { id: "merged", label: "Merged", value: merged.length, filtered: filteredMerged.length, icon: GitMerge, tone: "purple" },
+                    ]}
+                    filtered={Boolean(query)}
+                    navigate={navigate}
+                  />
+                )}
                 {view === "overview" && (
                   <div className="queue-tabs" aria-label="Work queue view">
                     {(
@@ -650,6 +663,46 @@ export default function DashboardWorkspace({
           </footer>
         </main>
       </div>
+    </div>
+  );
+}
+
+function WorkStats({
+  active,
+  items,
+  filtered,
+  navigate,
+}: {
+  active: View;
+  items: Array<{
+    id: Extract<View, "issues" | "closed-issues" | "pull-requests" | "merged">;
+    label: string;
+    value: number;
+    filtered: number;
+    icon: LucideIcon;
+    tone: string;
+  }>;
+  filtered: boolean;
+  navigate: (next: View) => void;
+}) {
+  return (
+    <div className="work-stats" aria-label="Work item counts">
+      {items.map(({ id, label, value, filtered: filteredValue, icon: Icon, tone }) => (
+        <button
+          key={id}
+          type="button"
+          className={`work-stat ${active === id ? "active" : ""}`}
+          aria-current={active === id ? "page" : undefined}
+          onClick={() => navigate(id)}
+        >
+          <span className="work-stat-label">
+            <Icon size={16} className={`${tone}-text`} aria-hidden="true" />
+            {label}
+          </span>
+          <strong>{filtered ? filteredValue : value}</strong>
+          <span>{filtered ? `${value} total` : "Recently updated"}</span>
+        </button>
+      ))}
     </div>
   );
 }
