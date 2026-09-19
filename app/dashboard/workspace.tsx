@@ -43,6 +43,7 @@ import { githubSyncMutationKey, syncGitHub } from "../../lib/github/client";
 import type { ScouterRow } from "../../lib/dashboard/scouters";
 import ScoutersView from "./scouters-view";
 import { Brand } from "../ui/brand";
+import { ThemeToggle } from "../ui/theme-toggle";
 import { signOut } from "../login/actions";
 import {
   Select,
@@ -338,6 +339,7 @@ export default function DashboardWorkspace({
             <strong>{title}</strong>
           </div>
           <div className="topbar-right">
+            <ThemeToggle />
             <span className="topbar-status">
               <span className={`status-dot ${connected ? "" : "offline"}`} />
               {connected ? "Connected" : "Offline"}

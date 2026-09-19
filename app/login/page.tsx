@@ -4,6 +4,7 @@ import { Brand } from "../ui/brand";
 import { createAuthClient } from "../../lib/supabase/auth-client";
 import { isAdmin } from "../../lib/supabase/auth-config";
 import { LoginForm } from "./form";
+import { ThemeToggle } from "../ui/theme-toggle";
 
 export const dynamic = "force-dynamic";
 
@@ -24,6 +25,7 @@ export default async function Login() {
 
   return (
     <main className="login-shell">
+      <ThemeToggle className="fixed right-4 top-4 z-10 sm:right-6 sm:top-6" />
       <div className="login-brand-panel">
         <Brand />
         <p>Repository activity, all in one place.</p>
