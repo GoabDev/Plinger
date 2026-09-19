@@ -4,6 +4,7 @@ import { selectSupabaseRows, updateSupabaseRows } from "../../../../lib/supabase
 import { createAuthClient } from "../../../../lib/supabase/auth-client";
 import { isAdmin } from "../../../../lib/supabase/auth-config";
 import { createHash, timingSafeEqual } from "node:crypto";
+import { githubSyncRequestSchema } from "../../../../lib/github/contracts";
 
 export const runtime = "nodejs";
 
@@ -30,10 +31,11 @@ export async function POST(request: Request) {
     } catch {
       return NextResponse.json({ error: "Invalid sync request" }, { status: 400 });
     }
-    if (!body || typeof body !== "object" || !("mode" in body) || (body.mode !== "poll" && body.mode !== "full")) {
+    const parsed = githubSyncRequestSchema.safeParse(body);
+    if (!parsed.success) {
       return NextResponse.json({ error: "Invalid sync mode" }, { status: 400 });
     }
-    mode = body.mode;
+    mode = parsed.data.mode;
   } else {
     if (request.headers.get("sec-fetch-site") === "cross-site") {
       return NextResponse.json({ error: "Not authorized" }, { status: 403 });

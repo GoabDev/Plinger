@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import {
   Activity,
   ArrowLeft,
@@ -17,8 +18,9 @@ import {
 import type { IssueRow, PullRequestRow, WebhookEventRow } from "../../lib/dashboard/data";
 import type { ScouterProfile, ScouterRow } from "../../lib/dashboard/scouters";
 import { prStatus } from "../../lib/dashboard/status";
+import { adminScouterQueryKey, getAdminScouter } from "../../lib/scouter/admin-client";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
-import ScouterAdminDetails, { type AdminProfile } from "./scouter-admin-details";
+import ScouterAdminDetails from "./scouter-admin-details";
 
 type ProfileTab = "issues" | "pull-requests" | "activity" | "repositories";
 type IssueFilter = "all" | "open" | "closed";
@@ -47,10 +49,6 @@ export default function ScoutersView({
   const [tab, setTab] = useState<ProfileTab>("issues");
   const [issueFilter, setIssueFilter] = useState<IssueFilter>("all");
   const [prFilter, setPrFilter] = useState<PullRequestFilter>("all");
-  const [profile, setProfile] = useState<AdminProfile | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
-  const [retry, setRetry] = useState(0);
   const [mobileProfileOpen, setMobileProfileOpen] = useState(false);
   const backButtonRef = useRef<HTMLButtonElement>(null);
   const selectedRowRef = useRef<HTMLButtonElement | null>(null);
@@ -69,30 +67,13 @@ export default function ScoutersView({
     }
   }, [ordered, selectedLogin]);
 
-  useEffect(() => {
-    if (!selectedLogin || unavailable) return;
-    const controller = new AbortController();
-    setLoading(true);
-    setProfile(null);
-    setError("");
-    fetch(`/api/scouters/${encodeURIComponent(selectedLogin)}`, {
-      signal: controller.signal,
-      cache: "no-store",
-    })
-      .then(async (response) => {
-        const body = await response.json();
-        if (!response.ok) throw new Error(body.error ?? "Scouter activity is unavailable");
-        return body as AdminProfile;
-      })
-      .then((data) => setProfile(data))
-      .catch((cause) => {
-        if (!controller.signal.aborted) setError(cause instanceof Error ? cause.message : "Scouter activity is unavailable");
-      })
-      .finally(() => {
-        if (!controller.signal.aborted) setLoading(false);
-      });
-    return () => controller.abort();
-  }, [selectedLogin, unavailable, retry, refreshKey]);
+  const profileQuery = useQuery({
+    queryKey: [...adminScouterQueryKey(selectedLogin ?? ""), refreshKey],
+    queryFn: () => getAdminScouter(selectedLogin!),
+    enabled: Boolean(selectedLogin) && !unavailable,
+  });
+  const profile = profileQuery.data ?? null;
+  const error = profileQuery.error instanceof Error ? profileQuery.error.message : "";
 
   const filtered = ordered.filter((scouter) => {
     const disconnected = Boolean(scouter.uninstalled_at || scouter.suspended_at);
@@ -189,10 +170,10 @@ export default function ScoutersView({
         </button>
         {!selectedLogin || unavailable ? (
           <ScouterEmpty title={unavailable ? "Scouters are unavailable" : "No scouter selected"} detail={unavailable ? "Refresh the workspace to try again." : "Install Plinger on a personal GitHub account to see it here."} />
-        ) : loading ? (
+        ) : profileQuery.isPending ? (
           <div className="scouters-loading" role="status"><RefreshCw size={18} className="spinning" /> Loading {selectedLogin}</div>
         ) : error ? (
-          <ScouterEmpty title="Could not load this scouter" detail={error} action={<button type="button" className="button button-white" onClick={() => setRetry((value) => value + 1)}><RefreshCw size={15} /> Retry</button>} />
+          <ScouterEmpty title="Could not load this scouter" detail={error} action={<button type="button" className="button button-white" onClick={() => profileQuery.refetch()}><RefreshCw size={15} /> Retry</button>} />
         ) : profile ? (
           <>
             <div className="scouter-profile-heading">
@@ -211,7 +192,7 @@ export default function ScoutersView({
               </a>
             </div>
 
-            <ScouterAdminDetails profile={profile} onRefresh={() => setRetry((value) => value + 1)} />
+            <ScouterAdminDetails profile={profile} />
             <div className="scouter-metrics" aria-label="Scouter work totals">
               <Metric label="Open issues" value={profile.openIssues.count} icon={CircleDot} onClick={() => { setTab("issues"); setIssueFilter("open"); }} />
               <Metric label="Closed issues" value={profile.closedIssues.count} icon={CircleDot} onClick={() => { setTab("issues"); setIssueFilter("closed"); }} />

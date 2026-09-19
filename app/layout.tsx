@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { DM_Sans, Manrope } from "next/font/google";
 import { siteDescription, siteName, siteUrl } from "../lib/site";
+import { Providers } from "./providers";
 import "./globals.css";
 
 const bodyFont = DM_Sans({
@@ -72,8 +73,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={`${bodyFont.variable} ${displayFont.variable}`}>
-      <body>{children}</body>
+    <html lang="en" suppressHydrationWarning className={`${bodyFont.variable} ${displayFont.variable}`}>
+      <body><Providers>{children}</Providers></body>
     </html>
   );
 }

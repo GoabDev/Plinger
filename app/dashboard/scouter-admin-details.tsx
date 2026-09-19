@@ -1,20 +1,27 @@
 "use client";
 
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { ArrowUpRight, Check, ClipboardCopy, Eye, EyeOff, LockKeyhole, Landmark, Upload } from "lucide-react";
-import type { ScouterProfile } from "../../lib/dashboard/scouters";
+import { adminScouterQueryKey, revealScouterPat, reviewWithdrawalProof, type AdminScouterProfile } from "../../lib/scouter/admin-client";
 
-type AdminProfile = ScouterProfile & {
-  privateProfile: { patUploaded: boolean; patUpdatedAt: string | null; bankName: string; bankAccountName: string; bankAccountNumber: string; bankUpdatedAt: string | null };
-  proofs: Array<{ id: string; filename: string; status: string; created_at: string }>;
-};
-
-export default function ScouterAdminDetails({ profile, onRefresh }: { profile: AdminProfile; onRefresh: () => void }) {
+export default function ScouterAdminDetails({ profile }: { profile: AdminScouterProfile }) {
+  const queryClient = useQueryClient();
   const [pat, setPat] = useState("");
-  const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
   const [copied, setCopied] = useState(false);
   const login = profile.scouter.account_login;
+  const revealMutation = useMutation({
+    mutationFn: () => revealScouterPat(login),
+    onSuccess: ({ pat: value }) => setPat(value),
+    onError: (cause) => setError(cause instanceof Error ? cause.message : "Could not reveal PAT"),
+  });
+  const reviewMutation = useMutation({
+    mutationFn: ({ id, status }: { id: string; status: "confirmed" | "rejected" | "pending" }) => reviewWithdrawalProof(login, id, { status }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: adminScouterQueryKey(login) }),
+    onError: (cause) => setError(cause instanceof Error ? cause.message : "Could not review proof"),
+  });
+  const busy = revealMutation.isPending ? "pat" : reviewMutation.isPending ? reviewMutation.variables?.id ?? "proof" : "";
   useEffect(() => { setPat(""); setError(""); setCopied(false); }, [login]);
   useEffect(() => {
     if (!error) return;
@@ -23,14 +30,8 @@ export default function ScouterAdminDetails({ profile, onRefresh }: { profile: A
   }, [error]);
 
   async function reveal() {
-    setBusy("pat"); setError("");
-    try {
-      const response = await fetch(`/api/scouters/${encodeURIComponent(login)}/pat`, { method: "POST" });
-      const body = await response.json();
-      if (!response.ok) throw new Error(body.error || "Could not reveal PAT");
-      setPat(body.pat);
-    } catch (cause) { setError(cause instanceof Error ? cause.message : "Could not reveal PAT"); }
-    finally { setBusy(""); }
+    setError("");
+    revealMutation.mutate();
   }
 
   async function copyPat() {
@@ -39,14 +40,8 @@ export default function ScouterAdminDetails({ profile, onRefresh }: { profile: A
   }
 
   async function review(id: string, status: "confirmed" | "rejected" | "pending") {
-    setBusy(id); setError("");
-    try {
-      const response = await fetch(`/api/scouters/${encodeURIComponent(login)}/proofs/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status }) });
-      const body = await response.json();
-      if (!response.ok) throw new Error(body.error || "Could not review proof");
-      onRefresh();
-    } catch (cause) { setError(cause instanceof Error ? cause.message : "Could not review proof"); }
-    finally { setBusy(""); }
+    setError("");
+    reviewMutation.mutate({ id, status });
   }
 
   return <div className="scouter-admin-private">
@@ -64,4 +59,3 @@ export default function ScouterAdminDetails({ profile, onRefresh }: { profile: A
 }
 
 function formatDate(value: string | null) { return value ? new Date(value).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" }) : ""; }
-export type { AdminProfile };

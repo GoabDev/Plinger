@@ -10,6 +10,7 @@ import {
   Radio,
 } from "lucide-react";
 import { Brand } from "./ui/brand";
+import { ThemeToggle } from "./ui/theme-toggle";
 
 export default function Home() {
   return (
@@ -26,9 +27,12 @@ export default function Home() {
             GitHub <ArrowUpRight size={14} />
           </a>
         </div>
-        <Link className="button button-light" href="/scouter/login">
-          Open dashboard <ArrowRight size={16} />
-        </Link>
+        <div className="flex items-center gap-2.5">
+          <ThemeToggle inverted />
+          <Link className="button button-light max-[700px]:hidden" href="/scouter/login">
+            Open dashboard <ArrowRight size={16} />
+          </Link>
+        </div>
       </nav>
       <section className="hero">
         <div className="hero-brand-image" aria-hidden="true">

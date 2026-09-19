@@ -1,34 +1,71 @@
 "use client";
 
-import { useCallback, useEffect, useState, type FormEvent } from "react";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useEffect, useState } from "react";
+import { useForm } from "react-hook-form";
 import { ArrowUpRight, Check, ClipboardCopy, CircleDot, GitMerge, GitPullRequest, Landmark, LockKeyhole, Pencil, RefreshCw, Search, Upload } from "lucide-react";
-import type { ScouterProfile } from "../../lib/dashboard/scouters";
+import { bankDetailsSchema, githubPatSchema, withdrawalProofFormSchema, type BankDetailsInput, type GithubPatInput, type WithdrawalProofFormInput } from "../../lib/scouter/contracts";
+import { getScouterPortal, scouterPortalQueryKey, updateScouterProfile, uploadWithdrawalProof } from "../../lib/scouter/client";
 import ScouterWorkspace, { scouterViews, type ScouterView } from "./workspace";
 import { Input } from "../ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
 const WITHDRAWAL_ADDRESS = "GAZB64YEKBGODTQA2FTPYS5Y2IOZ75EEQSDMDIWWMP2X3YI4YIVWOFDY";
 
-type PrivateState = { patUploaded: boolean; patUpdatedAt: string | null; bankName: string; bankAccountName: string; bankAccountNumber: string; bankUpdatedAt: string | null };
-type Proof = { id: string; filename: string; status: string; created_at: string; reviewed_at: string | null };
-type PortalData = { work: ScouterProfile | null; profile: PrivateState; proofs: Proof[] };
-
 export default function ScouterPortal() {
-  const [data, setData] = useState<PortalData | null>(null);
+  const queryClient = useQueryClient();
+  const portalQuery = useQuery({ queryKey: scouterPortalQueryKey, queryFn: getScouterPortal, gcTime: 0 });
+  const data = portalQuery.data;
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
-  const [busy, setBusy] = useState("");
-  const [pat, setPat] = useState("");
-  const [bankName, setBankName] = useState("");
-  const [accountName, setAccountName] = useState("");
-  const [accountNumber, setAccountNumber] = useState("");
-  const [proof, setProof] = useState<File | null>(null);
   const [copied, setCopied] = useState(false);
   const [view, setView] = useState<ScouterView>("overview");
   const [query, setQuery] = useState("");
   const [workStatus, setWorkStatus] = useState("all");
-  const [refreshing, setRefreshing] = useState(false);
+  const [workTab, setWorkTab] = useState<"issues" | "pull-requests">("issues");
   const [editingBank, setEditingBank] = useState(false);
   const [editingPat, setEditingPat] = useState(false);
+  const patForm = useForm<GithubPatInput>({
+    resolver: zodResolver(githubPatSchema),
+    defaultValues: { kind: "pat", pat: "" },
+  });
+  const bankForm = useForm<BankDetailsInput>({
+    resolver: zodResolver(bankDetailsSchema),
+    defaultValues: { kind: "bank", bankName: "", accountName: "", accountNumber: "" },
+  });
+  const proofForm = useForm<WithdrawalProofFormInput>({
+    resolver: zodResolver(withdrawalProofFormSchema),
+    mode: "onChange",
+  });
+
+  const profileMutation = useMutation({
+    mutationFn: updateScouterProfile,
+    onSuccess: async (_, input) => {
+      await queryClient.invalidateQueries({ queryKey: scouterPortalQueryKey });
+      setError("");
+      if (input.kind === "pat") {
+        patForm.reset();
+        setEditingPat(false);
+        setMessage("PAT saved. Authorized admins can reveal it for assigned issue work.");
+      } else {
+        setEditingBank(false);
+        setMessage("Bank details saved.");
+      }
+    },
+    onError: (cause) => setError(cause instanceof Error ? cause.message : "Could not save your details"),
+  });
+  const proofMutation = useMutation({
+    mutationFn: uploadWithdrawalProof,
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: scouterPortalQueryKey });
+      proofForm.reset();
+      setError("");
+      setMessage("Withdrawal proof uploaded for admin review.");
+    },
+    onError: (cause) => setError(cause instanceof Error ? cause.message : "Could not upload proof"),
+  });
+  const busy = profileMutation.isPending ? profileMutation.variables?.kind ?? "profile" : proofMutation.isPending ? "proof" : "";
+  const refreshing = portalQuery.isFetching;
 
   useEffect(() => {
     const sync = () => { const id = window.location.hash.slice(1); setView(scouterViews.some((item) => item.id === id) ? id as ScouterView : "overview"); };
@@ -37,18 +74,15 @@ export default function ScouterPortal() {
   }, []);
   function navigate(next: ScouterView) { setView(next); window.location.hash = next; }
 
-  const load = useCallback(async () => {
-    const response = await fetch("/api/me/scouter", { cache: "no-store" });
-    const body = await response.json();
-    if (!response.ok) throw new Error(body.error || "Could not load your workspace");
-    const next = body as PortalData;
-    setData(next);
-    setBankName(next.profile.bankName);
-    setAccountName(next.profile.bankAccountName);
-    setAccountNumber(next.profile.bankAccountNumber);
-  }, []);
-
-  useEffect(() => { load().catch((cause) => setError(cause.message)); }, [load]);
+  useEffect(() => {
+    if (!data) return;
+    bankForm.reset({
+      kind: "bank",
+      bankName: data.profile.bankName,
+      accountName: data.profile.bankAccountName,
+      accountNumber: data.profile.bankAccountNumber,
+    });
+  }, [bankForm, data]);
 
   useEffect(() => {
     if (!data || (!error && !message)) return;
@@ -57,46 +91,9 @@ export default function ScouterPortal() {
   }, [data, error, message]);
 
   async function refresh() {
-    setRefreshing(true); setError("");
-    try { await load(); } catch (cause) { setError(cause instanceof Error ? cause.message : "Could not refresh your workspace"); }
-    finally { setRefreshing(false); }
-  }
-
-  async function save(event: FormEvent<HTMLFormElement>, kind: "pat" | "bank") {
-    event.preventDefault();
-    setBusy(kind); setError(""); setMessage("");
-    try {
-      const response = await fetch("/api/me/scouter", {
-        method: "PATCH", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(kind === "pat" ? { kind, pat } : { kind, bankName, accountName, accountNumber }),
-      });
-      const body = await response.json();
-      if (!response.ok) throw new Error(body.error || "Could not save your details");
-      setPat("");
-      await load();
-      if (kind === "pat") setEditingPat(false);
-      else setEditingBank(false);
-      setMessage(kind === "pat" ? "PAT saved. Authorized admins can reveal it for assigned issue work." : "Bank details saved.");
-    } catch (cause) { setError(cause instanceof Error ? cause.message : "Could not save your details"); }
-    finally { setBusy(""); }
-  }
-
-  async function upload(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const uploadForm = event.currentTarget;
-    if (!proof) return;
-    setBusy("proof"); setError(""); setMessage("");
-    try {
-      const form = new FormData(); form.append("proof", proof);
-      const response = await fetch("/api/me/scouter/proofs", { method: "POST", body: form });
-      const body = await response.json();
-      if (!response.ok) throw new Error(body.error || "Could not upload proof");
-      setProof(null);
-      const input = uploadForm.querySelector<HTMLInputElement>('input[type="file"]');
-      if (input) input.value = "";
-      await load(); setMessage("Withdrawal proof uploaded for admin review.");
-    } catch (cause) { setError(cause instanceof Error ? cause.message : "Could not upload proof"); }
-    finally { setBusy(""); }
+    setError("");
+    const result = await portalQuery.refetch();
+    if (result.error) setError(result.error instanceof Error ? result.error.message : "Could not refresh your workspace");
   }
 
   async function copyAddress() {
@@ -104,7 +101,10 @@ export default function ScouterPortal() {
     catch { setError("Could not copy the public key. Select it below to copy manually."); }
   }
 
-  if (!data) return <ScouterWorkspace view={view} navigate={navigate}><div className="scouter-loading" role={error ? "alert" : "status"}>{error || "Loading your workspace..."}{error && <button type="button" className="button button-white" disabled={refreshing} onClick={refresh}><RefreshCw size={16} /> Retry</button>}</div></ScouterWorkspace>;
+  if (!data) {
+    const loadError = error || (portalQuery.error instanceof Error ? portalQuery.error.message : "");
+    return <ScouterWorkspace view={view} navigate={navigate}><div className="scouter-loading" role={loadError ? "alert" : "status"}>{loadError || "Loading your workspace..."}{loadError && <button type="button" className="button button-white" disabled={refreshing} onClick={refresh}><RefreshCw size={16} /> Retry</button>}</div></ScouterWorkspace>;
+  }
   const { work, profile, proofs } = data;
   if (!work) return <ScouterWorkspace view={view} navigate={navigate}><div className="scouter-loading" role="alert">This GitHub account has no personal Plinger installation yet.</div></ScouterWorkspace>;
   const login = work.scouter.account_login;
@@ -134,18 +134,23 @@ export default function ScouterPortal() {
 
     {view === "work" && <>
     <div className="scouter-work-toolbar"><div className="scouter-work-search"><Search size={16} aria-hidden="true" /><Input type="search" aria-label="Search your work" placeholder="Search issues and pull requests" value={query} onChange={(event) => setQuery(event.target.value)} /></div><Select value={workStatus} onValueChange={setWorkStatus}><SelectTrigger className="scouter-work-status" aria-label="Work status"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">All statuses</SelectItem><SelectItem value="open">Open</SelectItem><SelectItem value="closed">Closed</SelectItem><SelectItem value="merged">Merged</SelectItem></SelectContent></Select></div>
-    <section className="scouter-band" aria-labelledby="work-heading"><div className="scouter-band-heading"><h2 id="work-heading">Your work</h2><span>{work.openIssues.count} open issues, {work.openPullRequests.count} open PRs, {work.mergedPullRequests.count} merged</span></div>
-      <div className="scouter-work-grid"><div><h3>Assigned issues</h3>{issues.length ? <ul className="scouter-work-list">{issues.map((issue) => <li key={issue.id}><a href={issue.url || "#"} target="_blank" rel="noreferrer">#{issue.github_issue_number} {issue.title}<ArrowUpRight size={13} /></a><span>{issue.state}</span></li>)}</ul> : <p className="muted">No assigned issues recorded.</p>}</div>
-      <div><h3>Your pull requests</h3>{prs.length ? <ul className="scouter-work-list">{prs.map((pr) => <li key={pr.id}><a href={pr.url || "#"} target="_blank" rel="noreferrer">#{pr.github_pull_request_number} {pr.title}<ArrowUpRight size={13} /></a><span>{pr.merged ? "Merged" : pr.state}</span></li>)}</ul> : <p className="muted">No pull requests recorded.</p>}</div></div>
+    <section className="scouter-band" aria-labelledby="work-heading"><div className="scouter-band-heading"><h2 id="work-heading">Your work</h2><span>{issues.length + prs.length} matching items</span></div>
+      <div className="mb-3 flex gap-1 rounded-md border border-zinc-200 bg-zinc-100 p-1 dark:border-[#37313b] dark:bg-[#1e1b21]" role="tablist" aria-label="Work type">{([[
+        "issues", "Assigned issues", issues.length, CircleDot,
+      ], ["pull-requests", "Pull requests", prs.length, GitPullRequest]] as const).map(([id, label, count, Icon]) => <button key={id} id={`scouter-work-tab-${id}`} type="button" role="tab" aria-selected={workTab === id} aria-controls="scouter-work-panel" tabIndex={workTab === id ? 0 : -1} className={`inline-flex min-h-9 flex-1 items-center justify-center gap-1.5 rounded-sm border-0 px-2 py-1.5 text-xs font-semibold text-zinc-500 transition-colors hover:text-zinc-900 sm:px-3 dark:text-[#aaa3ae] dark:hover:text-[#ede9ef] ${workTab === id ? "bg-white text-zinc-900 shadow-sm dark:bg-[#342a39] dark:text-[#ede9ef]" : "bg-transparent"}`} onClick={() => setWorkTab(id)} onKeyDown={(event) => { if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return; event.preventDefault(); const next = id === "issues" ? "pull-requests" : "issues"; setWorkTab(next); document.getElementById(`scouter-work-tab-${next}`)?.focus(); }}><Icon size={15} aria-hidden="true" /><span>{label}</span><strong className="min-w-5 rounded-sm bg-zinc-200 px-1 py-0.5 text-center text-[10px] dark:bg-[#29242d]">{count}</strong></button>)}</div>
+      <div id="scouter-work-panel" className="overflow-x-auto rounded-md border border-zinc-200 bg-white dark:border-[#37313b] dark:bg-[#1b181d]" role="tabpanel" tabIndex={0} aria-labelledby={`scouter-work-tab-${workTab}`}>
+        {workTab === "issues" ? issues.length ? <table className="w-full table-fixed border-collapse text-left"><thead><tr><th className="border-b border-zinc-200 bg-zinc-50 px-2.5 py-2.5 text-[11px] font-medium text-zinc-500 sm:px-3.5 dark:border-[#37313b] dark:bg-[#211e24] dark:text-[#aaa3ae]" scope="col">Assigned issue</th><th className="w-[84px] border-b border-zinc-200 bg-zinc-50 px-2.5 py-2.5 text-[11px] font-medium text-zinc-500 sm:w-[110px] sm:px-3.5 dark:border-[#37313b] dark:bg-[#211e24] dark:text-[#aaa3ae]" scope="col">Status</th></tr></thead><tbody>{issues.map((issue) => <tr className="last:[&_td]:border-b-0 hover:bg-zinc-50 dark:hover:bg-[#211d23]" key={issue.id}><td className="border-b border-zinc-200 px-2.5 py-3 text-[13px] align-middle sm:px-3.5 dark:border-[#37313b]"><a className="inline-flex max-w-full flex-wrap items-start gap-x-1.5 gap-y-0.5 font-semibold leading-snug break-words hover:text-[#80628d] dark:hover:text-[#c8add2] dark:focus-visible:text-[#c8add2] sm:items-center sm:flex-nowrap" href={issue.url || "#"} target="_blank" rel="noreferrer"><span className="shrink-0 text-[11px] font-medium text-zinc-500 dark:text-[#aaa3ae]">#{issue.github_issue_number}</span>{issue.title}<ArrowUpRight size={13} aria-hidden="true" /></a></td><td className="border-b border-zinc-200 px-2.5 py-3 text-[13px] align-middle sm:px-3.5 dark:border-[#37313b]"><span className={`badge ${issue.state === "closed" ? "purple" : "green"}`}>{issue.state}</span></td></tr>)}</tbody></table> : <p className="px-4 py-8 text-center text-[13px] text-zinc-500 dark:text-[#aaa3ae]">No assigned issues match these filters.</p> : prs.length ? <table className="w-full table-fixed border-collapse text-left"><thead><tr><th className="border-b border-zinc-200 bg-zinc-50 px-2.5 py-2.5 text-[11px] font-medium text-zinc-500 sm:px-3.5 dark:border-[#37313b] dark:bg-[#211e24] dark:text-[#aaa3ae]" scope="col">Pull request</th><th className="w-[84px] border-b border-zinc-200 bg-zinc-50 px-2.5 py-2.5 text-[11px] font-medium text-zinc-500 sm:w-[110px] sm:px-3.5 dark:border-[#37313b] dark:bg-[#211e24] dark:text-[#aaa3ae]" scope="col">Status</th></tr></thead><tbody>{prs.map((pr) => <tr className="last:[&_td]:border-b-0 hover:bg-zinc-50 dark:hover:bg-[#211d23]" key={pr.id}><td className="border-b border-zinc-200 px-2.5 py-3 text-[13px] align-middle sm:px-3.5 dark:border-[#37313b]"><a className="inline-flex max-w-full flex-wrap items-start gap-x-1.5 gap-y-0.5 font-semibold leading-snug break-words hover:text-[#80628d] dark:hover:text-[#c8add2] dark:focus-visible:text-[#c8add2] sm:items-center sm:flex-nowrap" href={pr.url || "#"} target="_blank" rel="noreferrer"><span className="shrink-0 text-[11px] font-medium text-zinc-500 dark:text-[#aaa3ae]">#{pr.github_pull_request_number}</span>{pr.title}<ArrowUpRight size={13} aria-hidden="true" /></a></td><td className="border-b border-zinc-200 px-2.5 py-3 text-[13px] align-middle sm:px-3.5 dark:border-[#37313b]"><span className={`badge ${pr.merged ? "purple" : pr.state === "open" ? "green" : "neutral"}`}>{pr.merged ? "Merged" : pr.state}</span></td></tr>)}</tbody></table> : <p className="px-4 py-8 text-center text-[13px] text-zinc-500 dark:text-[#aaa3ae]">No pull requests match these filters.</p>}
+      </div>
     </section>
     </>}
 
     {view === "pat" &&
     <section className="scouter-band" aria-labelledby="pat-heading"><div className="scouter-band-heading"><h2 id="pat-heading"><LockKeyhole size={18} /> GitHub PAT</h2><span>{profile.patUploaded ? `Uploaded ${formatDate(profile.patUpdatedAt)}` : "Not uploaded"}</span></div>
-      {profile.patUploaded && !editingPat ? <div className="scouter-saved-pat"><span><Check size={18} aria-hidden="true" /> Personal access token added</span><button type="button" className="button button-white" disabled={Boolean(busy)} onClick={() => { setPat(""); setEditingPat(true); setError(""); setMessage(""); }}><Pencil size={15} aria-hidden="true" /> Update PAT</button></div> :
-      <form className="scouter-form" onSubmit={(event) => save(event, "pat")}><label htmlFor="scouter-pat">Personal access token</label><Input id="scouter-pat" type="password" autoComplete="off" autoFocus={editingPat} disabled={Boolean(busy)} aria-describedby="pat-consent" value={pat} onChange={(event) => setPat(event.target.value)} required placeholder={profile.patUploaded ? "Replace existing PAT" : "github_pat_..."} />
+      {profile.patUploaded && !editingPat ? <div className="scouter-saved-pat"><span><Check size={18} aria-hidden="true" /> Personal access token added</span><button type="button" className="button button-white" disabled={Boolean(busy)} onClick={() => { patForm.reset(); setEditingPat(true); setError(""); setMessage(""); }}><Pencil size={15} aria-hidden="true" /> Update PAT</button></div> :
+      <form className="scouter-form" onSubmit={patForm.handleSubmit((values) => { setError(""); setMessage(""); profileMutation.mutate(values); })}><label htmlFor="scouter-pat">Personal access token</label><Input id="scouter-pat" type="password" autoComplete="off" autoFocus={editingPat} disabled={Boolean(busy)} aria-describedby="pat-consent pat-error" placeholder={profile.patUploaded ? "Replace existing PAT" : "github_pat_..."} {...patForm.register("pat")} />
+        {patForm.formState.errors.pat && <p id="pat-error" className="scouter-field-error" role="alert">{patForm.formState.errors.pat.message}</p>}
         <p id="pat-consent" className="scouter-consent">Your GitHub Personal Access Token will be visible to authorized admins so they can authenticate the CLI and push fixes for issues assigned to you.</p>
-        <div className="scouter-form-actions"><button type="submit" className="button button-black" disabled={Boolean(busy)}>{busy === "pat" ? "Saving PAT..." : profile.patUploaded ? "Update PAT" : "Upload PAT"}</button>{profile.patUploaded && <button type="button" className="button button-white" disabled={Boolean(busy)} onClick={() => { setPat(""); setEditingPat(false); setError(""); }}>Cancel</button>}</div></form>}
+        <div className="scouter-form-actions"><button type="submit" className="button button-black" disabled={Boolean(busy)}>{busy === "pat" ? "Saving PAT..." : profile.patUploaded ? "Update PAT" : "Upload PAT"}</button>{profile.patUploaded && <button type="button" className="button button-white" disabled={Boolean(busy)} onClick={() => { patForm.reset(); setEditingPat(false); setError(""); }}>Cancel</button>}</div></form>}
     </section>}
 
     {view === "withdrawals" && <>
@@ -155,12 +160,12 @@ export default function ScouterPortal() {
     </section>
 
     <section className="scouter-band" aria-labelledby="bank-heading"><div className="scouter-band-heading"><h2 id="bank-heading"><Landmark size={18} /> Bank withdrawal details</h2><span>{profile.bankUpdatedAt ? `Updated ${formatDate(profile.bankUpdatedAt)}` : "Not added"}</span></div>
-      {profile.bankUpdatedAt && !editingBank ? <div className="scouter-saved-bank"><dl><div><dt>Bank name</dt><dd>{profile.bankName}</dd></div><div><dt>Name on account</dt><dd>{profile.bankAccountName}</dd></div><div><dt>Account number</dt><dd>{profile.bankAccountNumber}</dd></div></dl><button type="button" className="button button-white" disabled={Boolean(busy)} onClick={() => { setBankName(profile.bankName); setAccountName(profile.bankAccountName); setAccountNumber(profile.bankAccountNumber); setEditingBank(true); setError(""); setMessage(""); }}><Pencil size={15} aria-hidden="true" /> Edit bank details</button></div> :
-      <form className="scouter-form scouter-bank-form" onSubmit={(event) => save(event, "bank")}><label>Bank name<Input autoFocus={editingBank} disabled={Boolean(busy)} value={bankName} onChange={(event) => setBankName(event.target.value)} maxLength={120} required /></label><label>Name on account<Input disabled={Boolean(busy)} value={accountName} onChange={(event) => setAccountName(event.target.value)} maxLength={120} required /></label><label>Account number<Input disabled={Boolean(busy)} value={accountNumber} onChange={(event) => setAccountNumber(event.target.value)} inputMode="numeric" pattern="[0-9]{6,20}" required /></label><div className="scouter-form-actions"><button type="submit" className="button button-black" disabled={Boolean(busy)}>{busy === "bank" ? "Saving bank details..." : "Save bank details"}</button>{profile.bankUpdatedAt && <button type="button" className="button button-white" disabled={Boolean(busy)} onClick={() => { setBankName(profile.bankName); setAccountName(profile.bankAccountName); setAccountNumber(profile.bankAccountNumber); setEditingBank(false); setError(""); }}>Cancel</button>}</div></form>}
+      {profile.bankUpdatedAt && !editingBank ? <div className="scouter-saved-bank"><dl><div><dt>Bank name</dt><dd>{profile.bankName}</dd></div><div><dt>Name on account</dt><dd>{profile.bankAccountName}</dd></div><div><dt>Account number</dt><dd>{profile.bankAccountNumber}</dd></div></dl><button type="button" className="button button-white" disabled={Boolean(busy)} onClick={() => { bankForm.reset({ kind: "bank", bankName: profile.bankName, accountName: profile.bankAccountName, accountNumber: profile.bankAccountNumber }); setEditingBank(true); setError(""); setMessage(""); }}><Pencil size={15} aria-hidden="true" /> Edit bank details</button></div> :
+      <form className="scouter-form scouter-bank-form" onSubmit={bankForm.handleSubmit((values) => { setError(""); setMessage(""); profileMutation.mutate(values); })}><label>Bank name<Input autoFocus={editingBank} disabled={Boolean(busy)} aria-invalid={Boolean(bankForm.formState.errors.bankName)} aria-describedby={bankForm.formState.errors.bankName ? "bank-name-error" : undefined} {...bankForm.register("bankName")} />{bankForm.formState.errors.bankName && <span id="bank-name-error" className="scouter-field-error" role="alert">{bankForm.formState.errors.bankName.message}</span>}</label><label>Name on account<Input disabled={Boolean(busy)} aria-invalid={Boolean(bankForm.formState.errors.accountName)} aria-describedby={bankForm.formState.errors.accountName ? "account-name-error" : undefined} {...bankForm.register("accountName")} />{bankForm.formState.errors.accountName && <span id="account-name-error" className="scouter-field-error" role="alert">{bankForm.formState.errors.accountName.message}</span>}</label><label>Account number<Input disabled={Boolean(busy)} inputMode="numeric" aria-invalid={Boolean(bankForm.formState.errors.accountNumber)} aria-describedby={bankForm.formState.errors.accountNumber ? "account-number-error" : undefined} {...bankForm.register("accountNumber")} />{bankForm.formState.errors.accountNumber && <span id="account-number-error" className="scouter-field-error" role="alert">{bankForm.formState.errors.accountNumber.message}</span>}</label><div className="scouter-form-actions"><button type="submit" className="button button-black" disabled={Boolean(busy)}>{busy === "bank" ? "Saving bank details..." : "Save bank details"}</button>{profile.bankUpdatedAt && <button type="button" className="button button-white" disabled={Boolean(busy)} onClick={() => { bankForm.reset({ kind: "bank", bankName: profile.bankName, accountName: profile.bankAccountName, accountNumber: profile.bankAccountNumber }); setEditingBank(false); setError(""); }}>Cancel</button>}</div></form>}
     </section>
 
     <section className="scouter-band" aria-labelledby="proof-heading"><div className="scouter-band-heading"><h2 id="proof-heading"><Upload size={18} /> Withdrawal proof</h2><span>{proofs.length} submitted</span></div>
-      <form className="scouter-form scouter-proof-form" onSubmit={upload}><label htmlFor="scouter-proof">Drip Wave withdrawal confirmation</label><input id="scouter-proof" type="file" accept="image/png,image/jpeg,image/webp,application/pdf" onChange={(event) => setProof(event.target.files?.[0] || null)} required /><button type="submit" className="button button-black" disabled={!proof || Boolean(busy)}>Upload proof</button></form>
+      <form className="scouter-form scouter-proof-form" onSubmit={proofForm.handleSubmit((values) => { const file = values.proof.item(0); if (file) { setError(""); setMessage(""); proofMutation.mutate(file); } })}><label htmlFor="scouter-proof">Drip Wave withdrawal confirmation</label><input id="scouter-proof" type="file" accept="image/png,image/jpeg,image/webp,application/pdf" required aria-invalid={Boolean(proofForm.formState.errors.proof)} aria-describedby={proofForm.formState.errors.proof ? "scouter-proof-error" : undefined} {...proofForm.register("proof")} />{proofForm.formState.errors.proof && <p id="scouter-proof-error" className="scouter-field-error" role="alert">{proofForm.formState.errors.proof.message}</p>}<button type="submit" className="button button-black" disabled={!proofForm.formState.isValid || Boolean(busy)}>{busy === "proof" ? "Uploading proof..." : "Upload proof"}</button></form>
       {proofs.length > 0 && <ul className="scouter-proof-list">{proofs.map((item) => <li key={item.id}><a href={`/api/scouters/${encodeURIComponent(login)}/proofs/${item.id}`} target="_blank" rel="noreferrer">{item.filename}<ArrowUpRight size={13} /></a><span>{item.status}</span><time dateTime={item.created_at}>{formatDate(item.created_at)}</time></li>)}</ul>}
     </section>
     </>}

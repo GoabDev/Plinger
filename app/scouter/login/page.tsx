@@ -4,6 +4,7 @@ import { Brand } from "../../ui/brand";
 import { createAuthClient } from "../../../lib/supabase/auth-client";
 import { githubAccountId } from "../../../lib/scouter/portal";
 import { signInWithGitHub } from "./actions";
+import { ThemeToggle } from "../../ui/theme-toggle";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Scouter sign in", robots: { index: false, follow: false } };
@@ -16,6 +17,7 @@ export default async function ScouterLogin({ searchParams }: { searchParams: Pro
   }
   const { error } = await searchParams;
   return <main className="login-shell scouter-login-shell">
+    <ThemeToggle className="fixed right-4 top-4 z-10 sm:right-6 sm:top-6" />
     <div className="login-brand-panel"><Brand /><p>Scouter workspace</p></div>
     <div className="login-content"><div className="login-content-inner">
       <p className="overline">SCOUTER ACCESS</p>
