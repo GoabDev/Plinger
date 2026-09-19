@@ -2409,3 +2409,9 @@ ul {
   .scouter-tab-panel { padding: 0 18px 24px; }
   .scouter-content-heading { align-items: flex-start; flex-direction: column; justify-content: center; padding: 16px 0; }
 }
+.scouter-field-error {
+  color: #b42318;
+  display: block;
+  font-size: 0.78rem;
+  margin-top: 0.35rem;
+}

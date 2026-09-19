@@ -70,7 +70,7 @@ export type InstallationRow = {
 };
 
 export async function getDashboardData() {
-  const links = await selectSupabaseRows<IssuePullRequestRow>({
+  const linksPromise = selectSupabaseRows<IssuePullRequestRow>({
     table: "issue_pull_requests",
     query: {
       select: "github_issue_id,github_pull_request_id",
@@ -78,7 +78,69 @@ export async function getDashboardData() {
       limit: "200",
     },
   });
+  const repositoriesPromise = selectSupabaseRows<RepositoryRow>({
+    table: "repositories",
+    query: {
+      select:
+        "id,github_repository_id,owner_login,name,full_name,private,default_branch,archived,disabled,updated_at",
+      order: "updated_at.desc",
+      limit: "20",
+    },
+  });
+  const openIssuesPromise = selectSupabaseRows<IssueRow>({
+    table: "issues",
+    query: {
+      select:
+        "id,github_issue_id,github_issue_number,title,state,url,assignee_logins,labels,opened_at,closed_at,updated_at",
+      state: "eq.open",
+      order: "updated_at.desc",
+      limit: "50",
+    },
+  });
+  const closedIssuesPromise = selectSupabaseRows<IssueRow>({
+    table: "issues",
+    query: {
+      select: "id,github_issue_id,github_issue_number,title,state,url,assignee_logins,labels,opened_at,closed_at,updated_at",
+      state: "eq.closed",
+      order: "closed_at.desc.nullslast",
+      limit: "20",
+    },
+  });
+  const recentEventsPromise = selectSupabaseRows<WebhookEventRow>({
+    table: "webhook_events",
+    query: {
+      select:
+        "id,delivery_id,event,action,repository_full_name,sender_login,received_at",
+      order: "received_at.desc",
+      limit: "8",
+    },
+  });
+  const installationsPromise = selectSupabaseRows<InstallationRow>({
+    table: "github_installations",
+    query: {
+      select:
+        "id,installation_id,account_login,account_type,target_type,updated_at",
+      order: "updated_at.desc",
+      limit: "6",
+    },
+  });
+  const scoutersPromise = getScouterDirectory(true);
+  const links = await linksPromise;
   const linkedPrIds = [...new Set(links.data.map((link) => String(link.github_pull_request_id)))];
+  const linkedPullRequestsPromise = linkedPrIds.length ? selectSupabaseRows<PullRequestRow>({
+    table: "pull_requests",
+    query: {
+      select:
+        "id,github_pull_request_id,github_pull_request_number,title,state,url,author_login,head_ref,base_ref,merged,merged_at,mergeable,mergeable_state,updated_at",
+      github_pull_request_id: `in.(${linkedPrIds.join(",")})`,
+      order: "updated_at.desc",
+      limit: "200",
+    },
+  }) : Promise.resolve({
+    data: [] as PullRequestRow[],
+    skipped: false,
+    error: undefined as string | undefined,
+  });
   const [
     repositories,
     openIssues,
@@ -88,67 +150,13 @@ export async function getDashboardData() {
     installations,
     scouters,
   ] = await Promise.all([
-    selectSupabaseRows<RepositoryRow>({
-      table: "repositories",
-      query: {
-        select:
-          "id,github_repository_id,owner_login,name,full_name,private,default_branch,archived,disabled,updated_at",
-        order: "updated_at.desc",
-        limit: "20",
-      },
-    }),
-    selectSupabaseRows<IssueRow>({
-      table: "issues",
-      query: {
-        select:
-          "id,github_issue_id,github_issue_number,title,state,url,assignee_logins,labels,opened_at,closed_at,updated_at",
-        state: "eq.open",
-        order: "updated_at.desc",
-        limit: "50",
-      },
-    }),
-    selectSupabaseRows<IssueRow>({
-      table: "issues",
-      query: {
-        select: "id,github_issue_id,github_issue_number,title,state,url,assignee_logins,labels,opened_at,closed_at,updated_at",
-        state: "eq.closed",
-        order: "closed_at.desc.nullslast",
-        limit: "20",
-      },
-    }),
-    linkedPrIds.length ? selectSupabaseRows<PullRequestRow>({
-      table: "pull_requests",
-      query: {
-        select:
-          "id,github_pull_request_id,github_pull_request_number,title,state,url,author_login,head_ref,base_ref,merged,merged_at,mergeable,mergeable_state,updated_at",
-        github_pull_request_id: `in.(${linkedPrIds.join(",")})`,
-        order: "updated_at.desc",
-        limit: "200",
-      },
-    }) : Promise.resolve({
-      data: [] as PullRequestRow[],
-      skipped: false,
-      error: undefined as string | undefined,
-    }),
-    selectSupabaseRows<WebhookEventRow>({
-      table: "webhook_events",
-      query: {
-        select:
-          "id,delivery_id,event,action,repository_full_name,sender_login,received_at",
-        order: "received_at.desc",
-        limit: "8",
-      },
-    }),
-    selectSupabaseRows<InstallationRow>({
-      table: "github_installations",
-      query: {
-        select:
-          "id,installation_id,account_login,account_type,target_type,updated_at",
-        order: "updated_at.desc",
-        limit: "6",
-      },
-    }),
-    getScouterDirectory(true),
+    repositoriesPromise,
+    openIssuesPromise,
+    closedIssuesPromise,
+    linkedPullRequestsPromise,
+    recentEventsPromise,
+    installationsPromise,
+    scoutersPromise,
   ]);
   const openPullRequests = {
     ...linkedPullRequests,

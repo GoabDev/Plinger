@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { currentScouter, encryptPat, PatEncryptionConfigurationError, readPrivateProfile, readProofs, safeProfile, sameOrigin, serviceClient } from "../../../../lib/scouter/portal";
 import { getScouterProfile } from "../../../../lib/dashboard/scouters";
+import { scouterUpdateSchema } from "../../../../lib/scouter/contracts";
 
 export const runtime = "nodejs";
 
@@ -25,29 +26,23 @@ export async function PATCH(request: Request) {
   try {
     const current = await currentScouter();
     if (!current?.scouter.account_id) return NextResponse.json({ error: "GitHub scouter account required" }, { status: 403 });
-    const body = await request.json() as Record<string, unknown>;
+    const parsed = scouterUpdateSchema.safeParse(await request.json());
+    if (!parsed.success) {
+      return NextResponse.json({ error: parsed.error.issues[0]?.message || "Invalid update" }, { status: 400 });
+    }
+    const body = parsed.data;
     const row: Record<string, unknown> = {
       account_id: current.scouter.account_id,
       account_login: current.scouter.account_login,
       updated_at: new Date().toISOString(),
     };
     if (body.kind === "pat") {
-      const pat = typeof body.pat === "string" ? body.pat.trim() : "";
-      if (!/^(?:ghp_|github_pat_|gho_|ghu_|ghs_)[A-Za-z0-9_]{20,}$/.test(pat) || pat.length > 500) {
-        return NextResponse.json({ error: "Enter a valid GitHub personal access token" }, { status: 400 });
-      }
+      const pat = body.pat;
       row.pat_ciphertext = encryptPat(pat);
       row.pat_updated_at = row.updated_at;
     } else if (body.kind === "bank") {
-      const bankName = typeof body.bankName === "string" ? body.bankName.trim() : "";
-      const accountName = typeof body.accountName === "string" ? body.accountName.trim() : "";
-      const accountNumber = typeof body.accountNumber === "string" ? body.accountNumber.trim() : "";
-      if (!bankName || !accountName || !/^[0-9]{6,20}$/.test(accountNumber) || bankName.length > 120 || accountName.length > 120) {
-        return NextResponse.json({ error: "Enter your bank name, account name, and a valid account number" }, { status: 400 });
-      }
+      const { bankName, accountName, accountNumber } = body;
       Object.assign(row, { bank_name: bankName, bank_account_name: accountName, bank_account_number: accountNumber, bank_updated_at: row.updated_at });
-    } else {
-      return NextResponse.json({ error: "Unknown update" }, { status: 400 });
     }
     const existing = await readPrivateProfile(current.scouter.account_id);
     const client = serviceClient();

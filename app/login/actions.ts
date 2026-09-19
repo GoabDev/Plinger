@@ -3,30 +3,38 @@
 import { redirect } from "next/navigation";
 import { createAuthClient } from "../../lib/supabase/auth-client";
 import { isAdmin } from "../../lib/supabase/auth-config";
+import { adminSignInSchema } from "../../lib/auth/contracts";
 
-type SignInState = { error: string | null };
+export type SignInState = {
+  error: string | null;
+  fieldErrors: { email?: string; password?: string };
+};
 
 export async function signIn(
   _state: SignInState,
   formData: FormData,
 ): Promise<SignInState> {
-  const email = formData.get("email");
-  const password = formData.get("password");
   const supabase = await createAuthClient();
 
-  if (!supabase) return { error: "Sign-in is not configured yet." };
-  if (typeof email !== "string" || typeof password !== "string") {
-    return { error: "Enter your email and password." };
+  if (!supabase) return { error: "Sign-in is not configured yet.", fieldErrors: {} };
+  const parsed = adminSignInSchema.safeParse({ email: formData.get("email"), password: formData.get("password") });
+  if (!parsed.success) {
+    const fields = parsed.error.flatten().fieldErrors;
+    return {
+      error: null,
+      fieldErrors: { email: fields.email?.[0], password: fields.password?.[0] },
+    };
   }
+  const { email, password } = parsed.data;
 
   const { data, error } = await supabase.auth.signInWithPassword({
-    email: email.trim(),
+    email,
     password,
   });
 
   if (error || !isAdmin(data.user)) {
     if (data.user) await supabase.auth.signOut();
-    return { error: "Invalid credentials." };
+    return { error: "Invalid credentials.", fieldErrors: {} };
   }
 
   redirect("/dashboard");

@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState, useTransition } from "react";
+import { useMutation } from "@tanstack/react-query";
+import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { useRouter } from "next/navigation";
 import {
   Activity,
@@ -37,6 +39,7 @@ import type {
   WebhookEventRow,
 } from "../../lib/dashboard/data";
 import { prStatus } from "../../lib/dashboard/status";
+import { githubSyncMutationKey, syncGitHub } from "../../lib/github/client";
 import type { ScouterRow } from "../../lib/dashboard/scouters";
 import ScoutersView from "./scouters-view";
 import { Brand } from "../ui/brand";
@@ -113,6 +116,7 @@ export default function DashboardWorkspace({
   fetchedAt,
 }: Props) {
   const router = useRouter();
+  const reduceMotion = useReducedMotion();
   const [view, setView] = useState<View>("overview");
   const [query, setQuery] = useState("");
   const [eventType, setEventType] = useState("all");
@@ -123,9 +127,27 @@ export default function DashboardWorkspace({
   const [menuOpen, setMenuOpen] = useState(false);
   const menuTrigger = useRef<HTMLButtonElement>(null);
   const [pending, startTransition] = useTransition();
-  const [syncing, setSyncing] = useState(false);
   const [syncMessage, setSyncMessage] = useState("");
   const [syncFailed, setSyncFailed] = useState(false);
+  const syncMutation = useMutation({
+    mutationKey: githubSyncMutationKey,
+    mutationFn: syncGitHub,
+    onSuccess: (result) => {
+      setSyncFailed(Boolean(result.failed));
+      setSyncMessage(
+        result.failed
+          ? `Checked ${result.checked} records; ${result.failed} could not be checked.`
+          : result.skipped
+            ? `Checked ${result.checked} records; ${result.skipped} unavailable repositories were disabled.`
+            : `Checked ${result.checked} recent issues and linked pull requests.`,
+      );
+      startTransition(() => router.refresh());
+    },
+    onError: (error) => {
+      setSyncFailed(true);
+      setSyncMessage(error instanceof Error ? error.message : "GitHub sync failed");
+    },
+  });
   useEffect(() => {
     if (!syncMessage) return;
     const timeout = window.setTimeout(() => setSyncMessage(""), 6000);
@@ -193,29 +215,10 @@ export default function DashboardWorkspace({
     setEventType("all");
     setRepository("all");
   };
-  const refresh = async () => {
-    setSyncing(true);
+  const refresh = () => {
     setSyncFailed(false);
     setSyncMessage("");
-    try {
-      const response = await fetch("/api/github/sync", { method: "POST" });
-      const result = (await response.json()) as { checked?: number; failed?: number; skipped?: number; error?: string };
-      if (!response.ok) throw new Error(result.error ?? "GitHub sync failed");
-      setSyncFailed(Boolean(result.failed));
-      setSyncMessage(
-        result.failed
-          ? `Checked ${result.checked ?? 0} records; ${result.failed} could not be checked.`
-          : result.skipped
-            ? `Checked ${result.checked ?? 0} records; ${result.skipped} unavailable repositories were disabled.`
-          : `Checked ${result.checked ?? 0} recent issues and linked pull requests.`,
-      );
-      startTransition(() => router.refresh());
-    } catch (error) {
-      setSyncFailed(true);
-      setSyncMessage(error instanceof Error ? error.message : "GitHub sync failed");
-    } finally {
-      setSyncing(false);
-    }
+    syncMutation.mutate();
   };
   const latest = events[0];
   const repoNames = [
@@ -362,10 +365,11 @@ export default function DashboardWorkspace({
               <button
                 className="button button-white"
                 onClick={refresh}
-                disabled={pending || syncing}
+                disabled={pending || syncMutation.isPending}
+                aria-busy={pending || syncMutation.isPending}
               >
-                <RefreshCw size={15} className={pending || syncing ? "spinning" : ""} />
-                {pending || syncing ? "Syncing" : "Sync GitHub"}
+                <RefreshCw size={15} className={pending || syncMutation.isPending ? "spinning" : ""} />
+                {pending || syncMutation.isPending ? "Syncing" : "Sync GitHub"}
               </button>
               <a
                 className="button button-black"
@@ -378,11 +382,20 @@ export default function DashboardWorkspace({
               </a>
             </div>
           </div>
-          {syncMessage && (
-            <p className={`sync-message ${syncFailed ? "sync-error" : ""}`} role="status">
-              {syncMessage}
-            </p>
-          )}
+          <AnimatePresence initial={false}>
+            {syncMessage ? (
+              <motion.p
+                className={`sync-message ${syncFailed ? "sync-error" : ""}`}
+                role="status"
+                initial={reduceMotion ? false : { opacity: 0, y: -4 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={reduceMotion ? { opacity: 0 } : { opacity: 0, y: -4 }}
+                transition={{ duration: reduceMotion ? 0 : 0.18 }}
+              >
+                {syncMessage}
+              </motion.p>
+            ) : null}
+          </AnimatePresence>
           {(!connected || failed) && (
             <div className="connection-notice" role="status">
               <Inbox size={19} />

@@ -4,6 +4,7 @@ import { createAuthClient } from "../../../../../../lib/supabase/auth-client";
 import { isAdmin } from "../../../../../../lib/supabase/auth-config";
 import { githubAccountId, PROOF_BUCKET, sameOrigin, serviceClient } from "../../../../../../lib/scouter/portal";
 import type { User } from "@supabase/supabase-js";
+import { proofReviewSchema } from "../../../../../../lib/scouter/contracts";
 
 export const runtime = "nodejs";
 
@@ -50,8 +51,9 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ lo
     const { login, id } = await params;
     const context = await proofContext(login, id, data.user);
     if (!context) return NextResponse.json({ error: "Proof not found" }, { status: 404 });
-    const body = await request.json() as { status?: string };
-    if (body.status !== "confirmed" && body.status !== "rejected" && body.status !== "pending") return NextResponse.json({ error: "Invalid status" }, { status: 400 });
+    const parsed = proofReviewSchema.safeParse(await request.json());
+    if (!parsed.success) return NextResponse.json({ error: "Invalid status" }, { status: 400 });
+    const body = parsed.data;
     const { error } = await context.client.from("scouter_withdrawal_proofs")
       .update({ status: body.status, reviewed_at: body.status === "pending" ? null : new Date().toISOString() })
       .eq("id", id).eq("account_id", context.proof.account_id);

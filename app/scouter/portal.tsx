@@ -1,34 +1,70 @@
 "use client";
 
-import { useCallback, useEffect, useState, type FormEvent } from "react";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useEffect, useState } from "react";
+import { useForm } from "react-hook-form";
 import { ArrowUpRight, Check, ClipboardCopy, CircleDot, GitMerge, GitPullRequest, Landmark, LockKeyhole, Pencil, RefreshCw, Search, Upload } from "lucide-react";
-import type { ScouterProfile } from "../../lib/dashboard/scouters";
+import { bankDetailsSchema, githubPatSchema, withdrawalProofFormSchema, type BankDetailsInput, type GithubPatInput, type WithdrawalProofFormInput } from "../../lib/scouter/contracts";
+import { getScouterPortal, scouterPortalQueryKey, updateScouterProfile, uploadWithdrawalProof } from "../../lib/scouter/client";
 import ScouterWorkspace, { scouterViews, type ScouterView } from "./workspace";
 import { Input } from "../ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
 const WITHDRAWAL_ADDRESS = "GAZB64YEKBGODTQA2FTPYS5Y2IOZ75EEQSDMDIWWMP2X3YI4YIVWOFDY";
 
-type PrivateState = { patUploaded: boolean; patUpdatedAt: string | null; bankName: string; bankAccountName: string; bankAccountNumber: string; bankUpdatedAt: string | null };
-type Proof = { id: string; filename: string; status: string; created_at: string; reviewed_at: string | null };
-type PortalData = { work: ScouterProfile | null; profile: PrivateState; proofs: Proof[] };
-
 export default function ScouterPortal() {
-  const [data, setData] = useState<PortalData | null>(null);
+  const queryClient = useQueryClient();
+  const portalQuery = useQuery({ queryKey: scouterPortalQueryKey, queryFn: getScouterPortal, gcTime: 0 });
+  const data = portalQuery.data;
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
-  const [busy, setBusy] = useState("");
-  const [pat, setPat] = useState("");
-  const [bankName, setBankName] = useState("");
-  const [accountName, setAccountName] = useState("");
-  const [accountNumber, setAccountNumber] = useState("");
-  const [proof, setProof] = useState<File | null>(null);
   const [copied, setCopied] = useState(false);
   const [view, setView] = useState<ScouterView>("overview");
   const [query, setQuery] = useState("");
   const [workStatus, setWorkStatus] = useState("all");
-  const [refreshing, setRefreshing] = useState(false);
   const [editingBank, setEditingBank] = useState(false);
   const [editingPat, setEditingPat] = useState(false);
+  const patForm = useForm<GithubPatInput>({
+    resolver: zodResolver(githubPatSchema),
+    defaultValues: { kind: "pat", pat: "" },
+  });
+  const bankForm = useForm<BankDetailsInput>({
+    resolver: zodResolver(bankDetailsSchema),
+    defaultValues: { kind: "bank", bankName: "", accountName: "", accountNumber: "" },
+  });
+  const proofForm = useForm<WithdrawalProofFormInput>({
+    resolver: zodResolver(withdrawalProofFormSchema),
+    mode: "onChange",
+  });
+
+  const profileMutation = useMutation({
+    mutationFn: updateScouterProfile,
+    onSuccess: async (_, input) => {
+      await queryClient.invalidateQueries({ queryKey: scouterPortalQueryKey });
+      setError("");
+      if (input.kind === "pat") {
+        patForm.reset();
+        setEditingPat(false);
+        setMessage("PAT saved. Authorized admins can reveal it for assigned issue work.");
+      } else {
+        setEditingBank(false);
+        setMessage("Bank details saved.");
+      }
+    },
+    onError: (cause) => setError(cause instanceof Error ? cause.message : "Could not save your details"),
+  });
+  const proofMutation = useMutation({
+    mutationFn: uploadWithdrawalProof,
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: scouterPortalQueryKey });
+      proofForm.reset();
+      setError("");
+      setMessage("Withdrawal proof uploaded for admin review.");
+    },
+    onError: (cause) => setError(cause instanceof Error ? cause.message : "Could not upload proof"),
+  });
+  const busy = profileMutation.isPending ? profileMutation.variables?.kind ?? "profile" : proofMutation.isPending ? "proof" : "";
+  const refreshing = portalQuery.isFetching;
 
   useEffect(() => {
     const sync = () => { const id = window.location.hash.slice(1); setView(scouterViews.some((item) => item.id === id) ? id as ScouterView : "overview"); };
@@ -37,18 +73,15 @@ export default function ScouterPortal() {
   }, []);
   function navigate(next: ScouterView) { setView(next); window.location.hash = next; }
 
-  const load = useCallback(async () => {
-    const response = await fetch("/api/me/scouter", { cache: "no-store" });
-    const body = await response.json();
-    if (!response.ok) throw new Error(body.error || "Could not load your workspace");
-    const next = body as PortalData;
-    setData(next);
-    setBankName(next.profile.bankName);
-    setAccountName(next.profile.bankAccountName);
-    setAccountNumber(next.profile.bankAccountNumber);
-  }, []);
-
-  useEffect(() => { load().catch((cause) => setError(cause.message)); }, [load]);
+  useEffect(() => {
+    if (!data) return;
+    bankForm.reset({
+      kind: "bank",
+      bankName: data.profile.bankName,
+      accountName: data.profile.bankAccountName,
+      accountNumber: data.profile.bankAccountNumber,
+    });
+  }, [bankForm, data]);
 
   useEffect(() => {
     if (!data || (!error && !message)) return;
@@ -57,46 +90,9 @@ export default function ScouterPortal() {
   }, [data, error, message]);
 
   async function refresh() {
-    setRefreshing(true); setError("");
-    try { await load(); } catch (cause) { setError(cause instanceof Error ? cause.message : "Could not refresh your workspace"); }
-    finally { setRefreshing(false); }
-  }
-
-  async function save(event: FormEvent<HTMLFormElement>, kind: "pat" | "bank") {
-    event.preventDefault();
-    setBusy(kind); setError(""); setMessage("");
-    try {
-      const response = await fetch("/api/me/scouter", {
-        method: "PATCH", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(kind === "pat" ? { kind, pat } : { kind, bankName, accountName, accountNumber }),
-      });
-      const body = await response.json();
-      if (!response.ok) throw new Error(body.error || "Could not save your details");
-      setPat("");
-      await load();
-      if (kind === "pat") setEditingPat(false);
-      else setEditingBank(false);
-      setMessage(kind === "pat" ? "PAT saved. Authorized admins can reveal it for assigned issue work." : "Bank details saved.");
-    } catch (cause) { setError(cause instanceof Error ? cause.message : "Could not save your details"); }
-    finally { setBusy(""); }
-  }
-
-  async function upload(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const uploadForm = event.currentTarget;
-    if (!proof) return;
-    setBusy("proof"); setError(""); setMessage("");
-    try {
-      const form = new FormData(); form.append("proof", proof);
-      const response = await fetch("/api/me/scouter/proofs", { method: "POST", body: form });
-      const body = await response.json();
-      if (!response.ok) throw new Error(body.error || "Could not upload proof");
-      setProof(null);
-      const input = uploadForm.querySelector<HTMLInputElement>('input[type="file"]');
-      if (input) input.value = "";
-      await load(); setMessage("Withdrawal proof uploaded for admin review.");
-    } catch (cause) { setError(cause instanceof Error ? cause.message : "Could not upload proof"); }
-    finally { setBusy(""); }
+    setError("");
+    const result = await portalQuery.refetch();
+    if (result.error) setError(result.error instanceof Error ? result.error.message : "Could not refresh your workspace");
   }
 
   async function copyAddress() {
@@ -104,7 +100,10 @@ export default function ScouterPortal() {
     catch { setError("Could not copy the public key. Select it below to copy manually."); }
   }
 
-  if (!data) return <ScouterWorkspace view={view} navigate={navigate}><div className="scouter-loading" role={error ? "alert" : "status"}>{error || "Loading your workspace..."}{error && <button type="button" className="button button-white" disabled={refreshing} onClick={refresh}><RefreshCw size={16} /> Retry</button>}</div></ScouterWorkspace>;
+  if (!data) {
+    const loadError = error || (portalQuery.error instanceof Error ? portalQuery.error.message : "");
+    return <ScouterWorkspace view={view} navigate={navigate}><div className="scouter-loading" role={loadError ? "alert" : "status"}>{loadError || "Loading your workspace..."}{loadError && <button type="button" className="button button-white" disabled={refreshing} onClick={refresh}><RefreshCw size={16} /> Retry</button>}</div></ScouterWorkspace>;
+  }
   const { work, profile, proofs } = data;
   if (!work) return <ScouterWorkspace view={view} navigate={navigate}><div className="scouter-loading" role="alert">This GitHub account has no personal Plinger installation yet.</div></ScouterWorkspace>;
   const login = work.scouter.account_login;
@@ -142,10 +141,11 @@ export default function ScouterPortal() {
 
     {view === "pat" &&
     <section className="scouter-band" aria-labelledby="pat-heading"><div className="scouter-band-heading"><h2 id="pat-heading"><LockKeyhole size={18} /> GitHub PAT</h2><span>{profile.patUploaded ? `Uploaded ${formatDate(profile.patUpdatedAt)}` : "Not uploaded"}</span></div>
-      {profile.patUploaded && !editingPat ? <div className="scouter-saved-pat"><span><Check size={18} aria-hidden="true" /> Personal access token added</span><button type="button" className="button button-white" disabled={Boolean(busy)} onClick={() => { setPat(""); setEditingPat(true); setError(""); setMessage(""); }}><Pencil size={15} aria-hidden="true" /> Update PAT</button></div> :
-      <form className="scouter-form" onSubmit={(event) => save(event, "pat")}><label htmlFor="scouter-pat">Personal access token</label><Input id="scouter-pat" type="password" autoComplete="off" autoFocus={editingPat} disabled={Boolean(busy)} aria-describedby="pat-consent" value={pat} onChange={(event) => setPat(event.target.value)} required placeholder={profile.patUploaded ? "Replace existing PAT" : "github_pat_..."} />
+      {profile.patUploaded && !editingPat ? <div className="scouter-saved-pat"><span><Check size={18} aria-hidden="true" /> Personal access token added</span><button type="button" className="button button-white" disabled={Boolean(busy)} onClick={() => { patForm.reset(); setEditingPat(true); setError(""); setMessage(""); }}><Pencil size={15} aria-hidden="true" /> Update PAT</button></div> :
+      <form className="scouter-form" onSubmit={patForm.handleSubmit((values) => { setError(""); setMessage(""); profileMutation.mutate(values); })}><label htmlFor="scouter-pat">Personal access token</label><Input id="scouter-pat" type="password" autoComplete="off" autoFocus={editingPat} disabled={Boolean(busy)} aria-describedby="pat-consent pat-error" placeholder={profile.patUploaded ? "Replace existing PAT" : "github_pat_..."} {...patForm.register("pat")} />
+        {patForm.formState.errors.pat && <p id="pat-error" className="scouter-field-error" role="alert">{patForm.formState.errors.pat.message}</p>}
         <p id="pat-consent" className="scouter-consent">Your GitHub Personal Access Token will be visible to authorized admins so they can authenticate the CLI and push fixes for issues assigned to you.</p>
-        <div className="scouter-form-actions"><button type="submit" className="button button-black" disabled={Boolean(busy)}>{busy === "pat" ? "Saving PAT..." : profile.patUploaded ? "Update PAT" : "Upload PAT"}</button>{profile.patUploaded && <button type="button" className="button button-white" disabled={Boolean(busy)} onClick={() => { setPat(""); setEditingPat(false); setError(""); }}>Cancel</button>}</div></form>}
+        <div className="scouter-form-actions"><button type="submit" className="button button-black" disabled={Boolean(busy)}>{busy === "pat" ? "Saving PAT..." : profile.patUploaded ? "Update PAT" : "Upload PAT"}</button>{profile.patUploaded && <button type="button" className="button button-white" disabled={Boolean(busy)} onClick={() => { patForm.reset(); setEditingPat(false); setError(""); }}>Cancel</button>}</div></form>}
     </section>}
 
     {view === "withdrawals" && <>
@@ -155,12 +155,12 @@ export default function ScouterPortal() {
     </section>
 
     <section className="scouter-band" aria-labelledby="bank-heading"><div className="scouter-band-heading"><h2 id="bank-heading"><Landmark size={18} /> Bank withdrawal details</h2><span>{profile.bankUpdatedAt ? `Updated ${formatDate(profile.bankUpdatedAt)}` : "Not added"}</span></div>
-      {profile.bankUpdatedAt && !editingBank ? <div className="scouter-saved-bank"><dl><div><dt>Bank name</dt><dd>{profile.bankName}</dd></div><div><dt>Name on account</dt><dd>{profile.bankAccountName}</dd></div><div><dt>Account number</dt><dd>{profile.bankAccountNumber}</dd></div></dl><button type="button" className="button button-white" disabled={Boolean(busy)} onClick={() => { setBankName(profile.bankName); setAccountName(profile.bankAccountName); setAccountNumber(profile.bankAccountNumber); setEditingBank(true); setError(""); setMessage(""); }}><Pencil size={15} aria-hidden="true" /> Edit bank details</button></div> :
-      <form className="scouter-form scouter-bank-form" onSubmit={(event) => save(event, "bank")}><label>Bank name<Input autoFocus={editingBank} disabled={Boolean(busy)} value={bankName} onChange={(event) => setBankName(event.target.value)} maxLength={120} required /></label><label>Name on account<Input disabled={Boolean(busy)} value={accountName} onChange={(event) => setAccountName(event.target.value)} maxLength={120} required /></label><label>Account number<Input disabled={Boolean(busy)} value={accountNumber} onChange={(event) => setAccountNumber(event.target.value)} inputMode="numeric" pattern="[0-9]{6,20}" required /></label><div className="scouter-form-actions"><button type="submit" className="button button-black" disabled={Boolean(busy)}>{busy === "bank" ? "Saving bank details..." : "Save bank details"}</button>{profile.bankUpdatedAt && <button type="button" className="button button-white" disabled={Boolean(busy)} onClick={() => { setBankName(profile.bankName); setAccountName(profile.bankAccountName); setAccountNumber(profile.bankAccountNumber); setEditingBank(false); setError(""); }}>Cancel</button>}</div></form>}
+      {profile.bankUpdatedAt && !editingBank ? <div className="scouter-saved-bank"><dl><div><dt>Bank name</dt><dd>{profile.bankName}</dd></div><div><dt>Name on account</dt><dd>{profile.bankAccountName}</dd></div><div><dt>Account number</dt><dd>{profile.bankAccountNumber}</dd></div></dl><button type="button" className="button button-white" disabled={Boolean(busy)} onClick={() => { bankForm.reset({ kind: "bank", bankName: profile.bankName, accountName: profile.bankAccountName, accountNumber: profile.bankAccountNumber }); setEditingBank(true); setError(""); setMessage(""); }}><Pencil size={15} aria-hidden="true" /> Edit bank details</button></div> :
+      <form className="scouter-form scouter-bank-form" onSubmit={bankForm.handleSubmit((values) => { setError(""); setMessage(""); profileMutation.mutate(values); })}><label>Bank name<Input autoFocus={editingBank} disabled={Boolean(busy)} aria-invalid={Boolean(bankForm.formState.errors.bankName)} aria-describedby={bankForm.formState.errors.bankName ? "bank-name-error" : undefined} {...bankForm.register("bankName")} />{bankForm.formState.errors.bankName && <span id="bank-name-error" className="scouter-field-error" role="alert">{bankForm.formState.errors.bankName.message}</span>}</label><label>Name on account<Input disabled={Boolean(busy)} aria-invalid={Boolean(bankForm.formState.errors.accountName)} aria-describedby={bankForm.formState.errors.accountName ? "account-name-error" : undefined} {...bankForm.register("accountName")} />{bankForm.formState.errors.accountName && <span id="account-name-error" className="scouter-field-error" role="alert">{bankForm.formState.errors.accountName.message}</span>}</label><label>Account number<Input disabled={Boolean(busy)} inputMode="numeric" aria-invalid={Boolean(bankForm.formState.errors.accountNumber)} aria-describedby={bankForm.formState.errors.accountNumber ? "account-number-error" : undefined} {...bankForm.register("accountNumber")} />{bankForm.formState.errors.accountNumber && <span id="account-number-error" className="scouter-field-error" role="alert">{bankForm.formState.errors.accountNumber.message}</span>}</label><div className="scouter-form-actions"><button type="submit" className="button button-black" disabled={Boolean(busy)}>{busy === "bank" ? "Saving bank details..." : "Save bank details"}</button>{profile.bankUpdatedAt && <button type="button" className="button button-white" disabled={Boolean(busy)} onClick={() => { bankForm.reset({ kind: "bank", bankName: profile.bankName, accountName: profile.bankAccountName, accountNumber: profile.bankAccountNumber }); setEditingBank(false); setError(""); }}>Cancel</button>}</div></form>}
     </section>
 
     <section className="scouter-band" aria-labelledby="proof-heading"><div className="scouter-band-heading"><h2 id="proof-heading"><Upload size={18} /> Withdrawal proof</h2><span>{proofs.length} submitted</span></div>
-      <form className="scouter-form scouter-proof-form" onSubmit={upload}><label htmlFor="scouter-proof">Drip Wave withdrawal confirmation</label><input id="scouter-proof" type="file" accept="image/png,image/jpeg,image/webp,application/pdf" onChange={(event) => setProof(event.target.files?.[0] || null)} required /><button type="submit" className="button button-black" disabled={!proof || Boolean(busy)}>Upload proof</button></form>
+      <form className="scouter-form scouter-proof-form" onSubmit={proofForm.handleSubmit((values) => { const file = values.proof.item(0); if (file) { setError(""); setMessage(""); proofMutation.mutate(file); } })}><label htmlFor="scouter-proof">Drip Wave withdrawal confirmation</label><input id="scouter-proof" type="file" accept="image/png,image/jpeg,image/webp,application/pdf" required aria-invalid={Boolean(proofForm.formState.errors.proof)} aria-describedby={proofForm.formState.errors.proof ? "scouter-proof-error" : undefined} {...proofForm.register("proof")} />{proofForm.formState.errors.proof && <p id="scouter-proof-error" className="scouter-field-error" role="alert">{proofForm.formState.errors.proof.message}</p>}<button type="submit" className="button button-black" disabled={!proofForm.formState.isValid || Boolean(busy)}>{busy === "proof" ? "Uploading proof..." : "Upload proof"}</button></form>
       {proofs.length > 0 && <ul className="scouter-proof-list">{proofs.map((item) => <li key={item.id}><a href={`/api/scouters/${encodeURIComponent(login)}/proofs/${item.id}`} target="_blank" rel="noreferrer">{item.filename}<ArrowUpRight size={13} /></a><span>{item.status}</span><time dateTime={item.created_at}>{formatDate(item.created_at)}</time></li>)}</ul>}
     </section>
     </>}

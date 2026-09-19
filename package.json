@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
+    "test": "vitest run",
     "supabase": "set SUPABASE_TELEMETRY_DISABLED=1&& supabase",
     "supabase:login": "set SUPABASE_TELEMETRY_DISABLED=1&& supabase login",
     "supabase:link": "set SUPABASE_TELEMETRY_DISABLED=1&& supabase link",
@@ -15,13 +16,18 @@
     "supabase:advisors": "set SUPABASE_TELEMETRY_DISABLED=1&& supabase db lint"
   },
   "dependencies": {
+    "@hookform/resolvers": "^5.9.1",
     "@radix-ui/react-select": "^2.3.7",
     "@supabase/ssr": "^0.12.7",
     "@supabase/supabase-js": "^2.116.0",
+    "@tanstack/react-query": "^5.103.1",
     "lucide-react": "^1.46.0",
+    "motion": "^13.4.0",
     "next": "latest",
     "react": "latest",
-    "react-dom": "latest"
+    "react-dom": "latest",
+    "react-hook-form": "^7.88.0",
+    "zod": "^4.6.5"
   },
   "devDependencies": {
     "@types/node": "latest",
@@ -30,6 +36,7 @@
     "eslint": "latest",
     "eslint-config-next": "latest",
     "supabase": "^2.117.0",
-    "typescript": "latest"
+    "typescript": "latest",
+    "vitest": "^5.0.1"
   }
 }
