@@ -94,7 +94,7 @@ export async function verifyStellarWithdrawal(reference: string) {
 export async function readAllEarnings() {
   const client = serviceClient();
   const [{ data: claims, error: claimsError }, { data: profiles, error: profilesError }] = await Promise.all([
-    client.from("scouter_withdrawal_proofs").select("id,account_id,storage_path,filename,status,reviewed_at,created_at,transaction_hash,operation_id,amount_stroops,asset_code,asset_issuer,source_account,destination_account,ledger,transaction_created_at,chain_verified_at,payout_status,paid_at").not("transaction_hash", "is", null).order("transaction_created_at", { ascending: false }).limit(1000),
+    client.from("scouter_withdrawal_proofs").select("id,account_id,storage_path,filename,status,reviewed_at,created_at,transaction_hash,operation_id,amount_stroops,asset_code,asset_issuer,source_account,destination_account,ledger,transaction_created_at,chain_verified_at,payout_status,paid_at,payout_scouter_share_stroops,payout_exchange_rate_micros,payout_amount_kobo,payout_rate_source,payout_rate_updated_at,payout_rate_is_fallback").not("transaction_hash", "is", null).order("transaction_created_at", { ascending: false }).limit(1000),
     client.from("scouter_profiles").select("account_id,account_login,bank_name,bank_account_name,bank_account_number"),
   ]);
   if (claimsError) throw claimsError;
@@ -103,6 +103,9 @@ export async function readAllEarnings() {
   return (claims ?? []).map((claim) => ({
     ...claim,
     amount_stroops: String(claim.amount_stroops),
+    payout_scouter_share_stroops: claim.payout_scouter_share_stroops === null ? null : String(claim.payout_scouter_share_stroops),
+    payout_exchange_rate_micros: claim.payout_exchange_rate_micros === null ? null : String(claim.payout_exchange_rate_micros),
+    payout_amount_kobo: claim.payout_amount_kobo === null ? null : String(claim.payout_amount_kobo),
     profile: byAccount.get(String(claim.account_id)) ?? null,
   }));
 }
@@ -115,5 +118,11 @@ function parseStellarAmount(amount: string) {
 
 export function publicProof(proof: WithdrawalProof) {
   const { storage_path: _storagePath, ...safe } = proof;
-  return { ...safe, amount_stroops: safe.amount_stroops === null ? null : String(safe.amount_stroops) };
+  return {
+    ...safe,
+    amount_stroops: safe.amount_stroops === null ? null : String(safe.amount_stroops),
+    payout_scouter_share_stroops: safe.payout_scouter_share_stroops === null ? null : String(safe.payout_scouter_share_stroops),
+    payout_exchange_rate_micros: safe.payout_exchange_rate_micros === null ? null : String(safe.payout_exchange_rate_micros),
+    payout_amount_kobo: safe.payout_amount_kobo === null ? null : String(safe.payout_amount_kobo),
+  };
 }
