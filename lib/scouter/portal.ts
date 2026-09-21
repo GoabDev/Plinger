@@ -37,6 +37,12 @@ export type WithdrawalProof = {
   chain_verified_at: string | null;
   payout_status: "unpaid" | "paid";
   paid_at: string | null;
+  payout_scouter_share_stroops: string | number | null;
+  payout_exchange_rate_micros: string | number | null;
+  payout_amount_kobo: string | number | null;
+  payout_rate_source: string | null;
+  payout_rate_updated_at: string | null;
+  payout_rate_is_fallback: boolean | null;
   created_at: string;
 };
 
@@ -87,7 +93,7 @@ export async function readPrivateProfile(accountId: number) {
 
 export async function readProofs(accountId: number) {
   const { data, error } = await serviceClient().from("scouter_withdrawal_proofs")
-    .select("id,account_id,storage_path,filename,status,reviewed_at,transaction_hash,operation_id,amount_stroops,asset_code,asset_issuer,source_account,destination_account,ledger,transaction_created_at,chain_verified_at,payout_status,paid_at,created_at")
+    .select("id,account_id,storage_path,filename,status,reviewed_at,transaction_hash,operation_id,amount_stroops,asset_code,asset_issuer,source_account,destination_account,ledger,transaction_created_at,chain_verified_at,payout_status,paid_at,payout_scouter_share_stroops,payout_exchange_rate_micros,payout_amount_kobo,payout_rate_source,payout_rate_updated_at,payout_rate_is_fallback,created_at")
     .eq("account_id", accountId).order("created_at", { ascending: false }).limit(1000);
   if (error) throw error;
   return data as WithdrawalProof[];

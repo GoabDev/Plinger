@@ -225,6 +225,7 @@ scouter.
 ## Verified Earnings
 
 Apply `supabase/migrations/20260921073608_add_verified_scouter_earnings.sql`
+and `supabase/migrations/20260921111508_add_payout_accounting_snapshots.sql`
 before using the Earnings views. A scouter submits both a Stellar Expert public
 transaction URL (or transaction hash) and a Drip Wave withdrawal proof. The
 server verifies the transaction against Stellar Horizon, accepts only a
@@ -239,6 +240,12 @@ Admins separately mark the scouter share as paid; rejected and pending claims
 do not contribute to confirmed totals. Scouters can only access their own
 earnings through the authenticated `/api/me/scouter` route, while the aggregate
 earnings API requires the configured admin account.
+
+Marking an earning paid snapshots the scouter's USD share, the exact USD/NGN
+rate, the resulting naira amount in kobo, the rate source, and the payment time.
+Historical paid amounts therefore remain fixed when the market rate changes.
+Marking the payout unpaid clears that snapshot so a later payment records a new
+rate and amount.
 
 The admin directory shows a purple dot beside installation status when a matching
 GitHub identity has a recorded Supabase Auth sign-in. This includes existing

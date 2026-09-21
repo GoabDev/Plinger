@@ -19,9 +19,10 @@ export const bankDetailsSchema = z.object({
 
 export const scouterUpdateSchema = z.discriminatedUnion("kind", [githubPatSchema, bankDetailsSchema]);
 export const proofReviewSchema = z.object({ status: z.enum(["confirmed", "rejected", "pending"]) });
-export const earningsActionSchema = z.discriminatedUnion("action", [
+export const earningsActionSchema = z.union([
   z.object({ action: z.literal("review"), status: z.enum(["confirmed", "rejected", "pending"]) }),
-  z.object({ action: z.literal("payout"), status: z.enum(["paid", "unpaid"]) }),
+  z.object({ action: z.literal("payout"), status: z.literal("paid"), rateMicros: z.string().regex(/^\d+$/, "Invalid payout rate") }),
+  z.object({ action: z.literal("payout"), status: z.literal("unpaid") }),
 ]);
 
 const proofTypes = ["image/png", "image/jpeg", "image/webp", "application/pdf"];
@@ -64,6 +65,12 @@ export type WithdrawalProofSummary = {
   chain_verified_at: string | null;
   payout_status: "unpaid" | "paid";
   paid_at: string | null;
+  payout_scouter_share_stroops: string | null;
+  payout_exchange_rate_micros: string | null;
+  payout_amount_kobo: string | null;
+  payout_rate_source: string | null;
+  payout_rate_updated_at: string | null;
+  payout_rate_is_fallback: boolean | null;
 };
 
 export type AdminEarningClaim = WithdrawalProofSummary & {

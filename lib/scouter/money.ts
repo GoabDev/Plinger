@@ -19,12 +19,23 @@ export function formatUsd(amountStroops: string | number | bigint) {
 }
 
 export function formatNaira(amountStroops: string | number | bigint, rateMicros: string | number | bigint) {
-  const micros = (BigInt(amountStroops) * BigInt(rateMicros)) / STELLAR_SCALE;
-  const sign = micros < BigInt(0) ? "-" : "";
-  const absolute = micros < BigInt(0) ? -micros : micros;
-  const roundedCents = (absolute * BigInt(100) + NGN_RATE_SCALE / BigInt(2)) / NGN_RATE_SCALE;
-  const whole = roundedCents / BigInt(100);
-  const cents = roundedCents % BigInt(100);
+  return formatNairaKobo(calculateNairaKobo(amountStroops, rateMicros));
+}
+
+export function calculateNairaKobo(amountStroops: string | number | bigint, rateMicros: string | number | bigint) {
+  const denominator = STELLAR_SCALE * NGN_RATE_SCALE;
+  const numerator = BigInt(amountStroops) * BigInt(rateMicros) * BigInt(100);
+  return numerator < BigInt(0)
+    ? -((-numerator + denominator / BigInt(2)) / denominator)
+    : (numerator + denominator / BigInt(2)) / denominator;
+}
+
+export function formatNairaKobo(amountKobo: string | number | bigint) {
+  const value = BigInt(amountKobo);
+  const sign = value < BigInt(0) ? "-" : "";
+  const absolute = value < BigInt(0) ? -value : value;
+  const whole = absolute / BigInt(100);
+  const cents = absolute % BigInt(100);
   return `${sign}\u20a6${whole.toLocaleString("en-NG")}.${cents.toString().padStart(2, "0")}`;
 }
 
