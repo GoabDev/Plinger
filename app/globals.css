@@ -221,6 +221,14 @@ ul {
   background: #fff4dd;
   color: var(--amber);
 }
+.red {
+  background: #fff0ee;
+  color: #a53b32;
+}
+.red {
+  background: #fff0ee;
+  color: #a53b32;
+}
 .badge {
   display: inline-flex;
   align-items: center;
@@ -2376,6 +2384,60 @@ ul {
 .scouter-admin-proofs li { flex-wrap: wrap; }
 .scouter-admin-proofs li > div { display: flex; gap: 5px; }
 .scouter-admin-proofs .button { min-height: 28px; padding: 4px 8px; font-size: 11px; }
+.earnings-view { display: grid; gap: 24px; }
+.earnings-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-top: -8px; }
+.earnings-toolbar p { color: var(--muted); font-size: 12px; }
+.earnings-summary { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); overflow: hidden; border: 1px solid var(--line); border-radius: 6px; background: var(--line); gap: 1px; }
+.earnings-summary-card { min-width: 0; min-height: 136px; padding: 20px; background: #fff; }
+.earnings-summary-card > span { display: flex; align-items: center; justify-content: space-between; gap: 12px; color: var(--muted); font-size: 12px; }
+.earnings-summary-card > span svg { color: #777b88; }
+.earnings-summary-card.green > span svg { color: var(--green); }
+.earnings-summary-card.purple > span svg { color: var(--purple); }
+.earnings-summary-card.amber > span svg { color: var(--amber); }
+.earnings-summary-card strong { display: block; margin-top: 17px; font-size: clamp(22px, 2.4vw, 31px); font-weight: 680; letter-spacing: -0.035em; }
+.earnings-summary-card small { display: block; margin-top: 7px; color: var(--muted); font-size: 11px; line-height: 1.4; }
+.earnings-panel { overflow: hidden; border: 1px solid var(--line); border-radius: 6px; background: #fff; }
+.earnings-panel-heading { display: flex; align-items: center; justify-content: space-between; gap: 18px; padding: 20px 22px; border-bottom: 1px solid var(--line); }
+.earnings-panel-heading h2 { margin-top: 2px; font-size: 17px; font-weight: 650; }
+.earnings-panel-heading > span { color: var(--muted); font-size: 12px; }
+.earnings-table-wrap { overflow-x: auto; }
+.earnings-table { width: 100%; min-width: 840px; border-collapse: collapse; text-align: left; }
+.earnings-table th { padding: 10px 14px; border-bottom: 1px solid var(--line); background: #f7f7f9; color: var(--muted); font-size: 11px; font-weight: 600; }
+.earnings-table td { padding: 14px; border-bottom: 1px solid var(--line); font-size: 13px; vertical-align: middle; }
+.earnings-table tbody tr:last-child td { border-bottom: 0; }
+.earnings-table tbody tr:hover { background: #fafafd; }
+.earnings-table td strong, .earnings-table td small { display: block; }
+.earnings-table td strong { font-weight: 650; }
+.earnings-table td small { margin-top: 4px; color: var(--muted); font-size: 10px; }
+.earnings-empty, .earnings-state { padding: 42px 22px; color: var(--muted); text-align: center; font-size: 13px; }
+.earnings-state { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 10px; }
+.earnings-state strong, .earnings-state span { width: 100%; }
+.earning-claims { display: grid; }
+.earning-claim { display: grid; grid-template-columns: minmax(175px, 1.15fr) minmax(210px, 1.2fr) auto auto auto; align-items: center; gap: 18px; padding: 16px 20px; border-bottom: 1px solid var(--line); }
+.earning-claim:last-child { border-bottom: 0; }
+.earning-claim-main { display: flex; align-items: center; min-width: 0; gap: 11px; }
+.earning-avatar { display: inline-flex; align-items: center; justify-content: center; flex: 0 0 34px; width: 34px; height: 34px; border-radius: 50%; background: #ececf1; color: #62646d; font-size: 12px; font-weight: 700; }
+.earning-claim-main strong, .earning-claim-main span, .earning-claim-money strong, .earning-claim-money > span { display: block; }
+.earning-claim-main strong { overflow: hidden; text-overflow: ellipsis; font-size: 13px; }
+.earning-claim-main span, .earning-claim-money > span { margin-top: 4px; color: var(--muted); font-size: 10px; }
+.earning-claim-money strong { font-size: 16px; }
+.earning-split { display: grid; grid-template-columns: 3fr 2fr; height: 3px; margin-top: 8px; overflow: hidden; border-radius: 999px; background: #eee; }
+.earning-split span:first-child { background: var(--green); }
+.earning-split span:last-child { background: var(--purple); }
+.earning-claim-links, .earning-claim-status, .earning-claim-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
+.earning-claim-links { flex-direction: column; align-items: flex-start; }
+.earning-claim-links a, .scouter-earning-list a { display: inline-flex; align-items: center; gap: 3px; color: var(--purple); font-size: 11px; font-weight: 600; }
+.earning-claim-actions { justify-content: flex-end; }
+.earning-claim-actions .button { min-height: 31px; padding: 5px 9px; font-size: 11px; }
+.scouter-earnings-summary { grid-template-columns: repeat(4, minmax(0, 1fr)); margin-bottom: 26px; }
+.scouter-earnings-summary .earnings-summary-card { min-height: 126px; }
+.scouter-earning-list { display: grid; margin-top: 24px; border-top: 1px solid var(--line); }
+.scouter-earning-list article { display: grid; grid-template-columns: minmax(110px, .8fr) minmax(170px, 1fr) auto auto; align-items: center; gap: 18px; min-height: 74px; padding: 13px 0; border-bottom: 1px solid var(--line); }
+.scouter-earning-list article > div > strong, .scouter-earning-list article > div > span { display: block; }
+.scouter-earning-list article > div > strong { font-size: 14px; }
+.scouter-earning-list article > div > span:not(.badge) { margin-top: 4px; color: var(--muted); font-size: 11px; }
+.scouter-earning-list article > div:nth-child(3), .scouter-earning-list article > div:last-child { display: flex; flex-wrap: wrap; gap: 7px; }
+.scouter-proof-form { margin-bottom: 8px; }
 @media (max-width: 700px) {
   .scouter-main { padding: 22px 18px 50px; }
   .scouter-page-heading { align-items: flex-start; }
@@ -2384,6 +2446,17 @@ ul {
   .scouter-bank-form { grid-template-columns: 1fr; }
   .scouter-admin-private { padding: 18px; }
   .scouter-proof-list li, .scouter-admin-proofs li { flex-wrap: wrap; }
+  .earnings-summary, .scouter-earnings-summary { grid-template-columns: 1fr; }
+  .earnings-toolbar { align-items: flex-start; flex-direction: column; }
+  .earning-claim { grid-template-columns: 1fr; gap: 12px; }
+  .earning-claim-links { flex-direction: row; }
+  .earning-claim-actions { justify-content: flex-start; }
+  .scouter-earning-list article { grid-template-columns: 1fr 1fr; }
+}
+@media (min-width: 701px) and (max-width: 1100px) {
+  .earnings-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .earning-claim { grid-template-columns: minmax(160px, 1fr) minmax(190px, 1fr) auto; }
+  .earning-claim-status, .earning-claim-actions { grid-column: span 1; }
 }
 @media (max-width: 1150px) {
   .scouters-layout { grid-template-columns: minmax(210px, 250px) minmax(0, 1fr); }
@@ -2438,6 +2511,8 @@ ul {
 .dark .icon-button:hover { @apply bg-[#2c2730]; }
 .dark .purple { @apply bg-[#33263b] text-[#c8add2]; }
 .dark .green { @apply bg-[#19352a] text-[#83c7a5]; }
+.dark .red { @apply bg-[#3a2222] text-[#e19890]; }
+.dark .red { @apply bg-[#3a2222] text-[#e19890]; }
 .dark .blue { @apply bg-[#1c2c3c] text-[#8bb3d9]; }
 .dark .neutral { @apply bg-[#2a272d] text-[#b7b0bb]; }
 .dark .amber { @apply bg-[#382f21] text-[#d7b36f]; }
@@ -2528,6 +2603,17 @@ ul {
 .dark .scouter-workspace .scouter-work-list span { @apply bg-[#29252d]; }
 .dark .scouter-notice { @apply border-[#315a47] bg-[#1a2d25] text-[#86c6a5]; }
 .dark .scouter-notice.error { @apply border-[#663d3a] bg-[#321f20] text-[#e19890]; }
+.dark .earnings-summary { @apply bg-[#37313b] border-[#37313b]; }
+.dark .earnings-summary-card,
+.dark .earnings-panel { @apply bg-[#1b181d] border-[#37313b]; }
+.dark .earnings-panel-heading,
+.dark .earning-claim,
+.dark .scouter-earning-list,
+.dark .scouter-earning-list article { @apply border-[#37313b]; }
+.dark .earnings-table th { @apply bg-[#211e24] text-[#aaa3ae] border-[#37313b]; }
+.dark .earnings-table td { @apply border-[#37313b]; }
+.dark .earnings-table tbody tr:hover { @apply bg-[#211d23]; }
+.dark .earning-avatar { @apply bg-[#302b33] text-[#c9c1cc]; }
 
 .dark .text-button,
 .dark .event-sender,

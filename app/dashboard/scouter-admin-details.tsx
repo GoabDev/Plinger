@@ -3,7 +3,7 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { ArrowUpRight, Check, ClipboardCopy, Eye, EyeOff, LockKeyhole, Landmark, Upload } from "lucide-react";
-import { adminScouterQueryKey, revealScouterPat, reviewWithdrawalProof, type AdminScouterProfile } from "../../lib/scouter/admin-client";
+import { adminEarningsQueryKey, adminScouterQueryKey, revealScouterPat, reviewWithdrawalProof, type AdminScouterProfile } from "../../lib/scouter/admin-client";
 
 export default function ScouterAdminDetails({ profile }: { profile: AdminScouterProfile }) {
   const queryClient = useQueryClient();
@@ -18,7 +18,12 @@ export default function ScouterAdminDetails({ profile }: { profile: AdminScouter
   });
   const reviewMutation = useMutation({
     mutationFn: ({ id, status }: { id: string; status: "confirmed" | "rejected" | "pending" }) => reviewWithdrawalProof(login, id, { status }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: adminScouterQueryKey(login) }),
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: adminScouterQueryKey(login) }),
+        queryClient.invalidateQueries({ queryKey: adminEarningsQueryKey }),
+      ]);
+    },
     onError: (cause) => setError(cause instanceof Error ? cause.message : "Could not review proof"),
   });
   const busy = revealMutation.isPending ? "pat" : reviewMutation.isPending ? reviewMutation.variables?.id ?? "proof" : "";

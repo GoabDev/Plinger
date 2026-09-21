@@ -2,7 +2,8 @@ import { describe, expect, it } from "vitest";
 import { responseJson } from "./api/client";
 import { adminSignInSchema } from "./auth/contracts";
 import { githubSyncRequestSchema, githubSyncResultSchema } from "./github/contracts";
-import { bankDetailsSchema, githubPatSchema, proofReviewSchema } from "./scouter/contracts";
+import { bankDetailsSchema, earningsActionSchema, githubPatSchema, proofReviewSchema } from "./scouter/contracts";
+import { formatNaira, formatUsd, splitEarnings } from "./scouter/money";
 
 describe("shared validation contracts", () => {
   it("normalizes valid admin credentials", () => {
@@ -33,6 +34,20 @@ describe("shared validation contracts", () => {
   it("restricts proof review statuses", () => {
     expect(proofReviewSchema.safeParse({ status: "confirmed" }).success).toBe(true);
     expect(proofReviewSchema.safeParse({ status: "approved" }).success).toBe(false);
+  });
+
+  it("restricts earnings review and payout actions", () => {
+    expect(earningsActionSchema.safeParse({ action: "review", status: "confirmed" }).success).toBe(true);
+    expect(earningsActionSchema.safeParse({ action: "payout", status: "paid" }).success).toBe(true);
+    expect(earningsActionSchema.safeParse({ action: "payout", status: "confirmed" }).success).toBe(false);
+  });
+
+  it("calculates the 60/40 split and naira conversion without floating point", () => {
+    const split = splitEarnings("150000000");
+    expect(formatUsd(split.gross)).toBe("$15.00");
+    expect(formatUsd(split.scouter)).toBe("$9.00");
+    expect(formatUsd(split.admin)).toBe("$6.00");
+    expect(formatNaira(split.scouter)).toBe("\u20a612,600");
   });
 
   it("validates GitHub sync responses", () => {

@@ -25,6 +25,18 @@ export type WithdrawalProof = {
   filename: string;
   status: "pending" | "confirmed" | "rejected";
   reviewed_at: string | null;
+  transaction_hash: string | null;
+  operation_id: string | null;
+  amount_stroops: string | number | null;
+  asset_code: string | null;
+  asset_issuer: string | null;
+  source_account: string | null;
+  destination_account: string | null;
+  ledger: number | null;
+  transaction_created_at: string | null;
+  chain_verified_at: string | null;
+  payout_status: "unpaid" | "paid";
+  paid_at: string | null;
   created_at: string;
 };
 
@@ -75,8 +87,8 @@ export async function readPrivateProfile(accountId: number) {
 
 export async function readProofs(accountId: number) {
   const { data, error } = await serviceClient().from("scouter_withdrawal_proofs")
-    .select("id,account_id,storage_path,filename,status,reviewed_at,created_at")
-    .eq("account_id", accountId).order("created_at", { ascending: false }).limit(30);
+    .select("id,account_id,storage_path,filename,status,reviewed_at,transaction_hash,operation_id,amount_stroops,asset_code,asset_issuer,source_account,destination_account,ledger,transaction_created_at,chain_verified_at,payout_status,paid_at,created_at")
+    .eq("account_id", accountId).order("created_at", { ascending: false }).limit(1000);
   if (error) throw error;
   return data as WithdrawalProof[];
 }
