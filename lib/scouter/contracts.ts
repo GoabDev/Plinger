@@ -78,10 +78,19 @@ export type AdminEarningClaim = WithdrawalProofSummary & {
   } | null;
 };
 
-export type AdminEarningsData = { claims: AdminEarningClaim[] };
+export type UsdNgnRate = {
+  rateMicros: string;
+  updatedAt: string | null;
+  nextUpdateAt: string | null;
+  sourceUrl: string;
+  isFallback: boolean;
+};
+
+export type AdminEarningsData = { claims: AdminEarningClaim[]; exchangeRate: UsdNgnRate };
 
 export type ScouterPortalData = {
   work: ScouterProfile | null;
   profile: ScouterPrivateState;
   proofs: WithdrawalProofSummary[];
+  exchangeRate: UsdNgnRate;
 };

@@ -10,7 +10,8 @@ import { getScouterPortal, scouterPortalQueryKey, updateScouterProfile, uploadWi
 import ScouterWorkspace, { scouterViews, type ScouterView } from "./workspace";
 import { Input } from "../ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
-import { formatNaira, formatUsd, splitEarnings } from "../../lib/scouter/money";
+import { DocumentUpload } from "../ui/document-upload";
+import { formatNaira, formatNairaRate, formatUsd, splitEarnings } from "../../lib/scouter/money";
 const WITHDRAWAL_ADDRESS = "GAZB64YEKBGODTQA2FTPYS5Y2IOZ75EEQSDMDIWWMP2X3YI4YIVWOFDY";
 
 export default function ScouterPortal() {
@@ -38,6 +39,7 @@ export default function ScouterPortal() {
     resolver: zodResolver(withdrawalProofFormSchema),
     mode: "onChange",
   });
+  const selectedProof = proofForm.watch("proof")?.item(0) ?? null;
 
   const profileMutation = useMutation({
     mutationFn: updateScouterProfile,
@@ -106,7 +108,7 @@ export default function ScouterPortal() {
     const loadError = error || (portalQuery.error instanceof Error ? portalQuery.error.message : "");
     return <ScouterWorkspace view={view} navigate={navigate}><div className="scouter-loading" role={loadError ? "alert" : "status"}>{loadError || "Loading your workspace..."}{loadError && <button type="button" className="button button-white" disabled={refreshing} onClick={refresh}><RefreshCw size={16} /> Retry</button>}</div></ScouterWorkspace>;
   }
-  const { work, profile, proofs } = data;
+  const { work, profile, proofs, exchangeRate } = data;
   if (!work) return <ScouterWorkspace view={view} navigate={navigate}><div className="scouter-loading" role="alert">This GitHub account has no personal Plinger installation yet.</div></ScouterWorkspace>;
   const login = work.scouter.account_login;
   const matches = (title: string, status: string) => title.toLowerCase().includes(query.toLowerCase()) && (workStatus === "all" || workStatus === status);
@@ -118,6 +120,7 @@ export default function ScouterPortal() {
   const confirmedShare = splitEarnings(confirmedGross).scouter;
   const paidShare = confirmedProofs.filter((item) => item.payout_status === "paid").reduce((sum, item) => sum + splitEarnings(item.amount_stroops ?? "0").scouter, BigInt(0));
   const outstandingShare = confirmedShare - paidShare;
+  const rateMicros = exchangeRate.rateMicros;
   const title = scouterViews.find((item) => item.id === view)!.label;
 
   return <ScouterWorkspace view={view} navigate={navigate} login={login} accountId={work.scouter.account_id}>
@@ -161,11 +164,12 @@ export default function ScouterPortal() {
 
     {view === "earnings" && <>
     <div className="earnings-summary scouter-earnings-summary" aria-label="Your earnings totals">
-      <article className="earnings-summary-card"><span><span>Confirmed gross</span><BadgeDollarSign size={18} aria-hidden="true" /></span><strong>{formatUsd(confirmedGross)}</strong><small>{formatNaira(confirmedGross)} total received</small></article>
-      <article className="earnings-summary-card green"><span><span>Your 60%</span><WalletCards size={18} aria-hidden="true" /></span><strong>{formatUsd(confirmedShare)}</strong><small>{formatNaira(confirmedShare)} at {"\u20a6"}1,400/$</small></article>
-      <article className="earnings-summary-card green"><span><span>Paid to you</span><Check size={18} aria-hidden="true" /></span><strong>{formatUsd(paidShare)}</strong><small>{formatNaira(paidShare)}</small></article>
-      <article className="earnings-summary-card amber"><span><span>Awaiting payout</span><RefreshCw size={18} aria-hidden="true" /></span><strong>{formatUsd(outstandingShare)}</strong><small>{formatNaira(outstandingShare)}</small></article>
+      <article className="earnings-summary-card"><span><span>Confirmed gross</span><BadgeDollarSign size={18} aria-hidden="true" /></span><strong>{formatUsd(confirmedGross)}</strong><small>{formatNaira(confirmedGross, rateMicros)} total received</small></article>
+      <article className="earnings-summary-card green"><span><span>Your 60%</span><WalletCards size={18} aria-hidden="true" /></span><strong>{formatUsd(confirmedShare)}</strong><small>{formatNaira(confirmedShare, rateMicros)} at {formatNairaRate(rateMicros)}</small></article>
+      <article className="earnings-summary-card green"><span><span>Paid to you</span><Check size={18} aria-hidden="true" /></span><strong>{formatUsd(paidShare)}</strong><small>{formatNaira(paidShare, rateMicros)}</small></article>
+      <article className="earnings-summary-card amber"><span><span>Awaiting payout</span><RefreshCw size={18} aria-hidden="true" /></span><strong>{formatUsd(outstandingShare)}</strong><small>{formatNaira(outstandingShare, rateMicros)}</small></article>
     </div>
+    <p className="scouter-consent">Naira values are estimates using the {exchangeRate.isFallback ? "fallback" : "latest market"} USD/NGN rate{exchangeRate.updatedAt ? ` updated ${formatRateDate(exchangeRate.updatedAt)}` : ""}. <a href={exchangeRate.sourceUrl} target="_blank" rel="noreferrer">Rates by Exchange Rate API <ArrowUpRight size={12} aria-hidden="true" /></a></p>
     <section className="scouter-band" aria-labelledby="destination-heading"><div className="scouter-band-heading"><h2 id="destination-heading">Drip Wave withdrawal</h2><span>Stellar public key</span></div>
       <p className="scouter-destination-copy">On Drip Wave, withdraw to this public key. No memo is required.</p>
       <div className="scouter-address"><code>{WITHDRAWAL_ADDRESS}</code><button type="button" className="button button-white" onClick={copyAddress} aria-label="Copy Drip Wave withdrawal public key" title="Copy public key">{copied ? <Check size={16} /> : <ClipboardCopy size={16} />}</button></div>
@@ -179,12 +183,13 @@ export default function ScouterPortal() {
     <section className="scouter-band" aria-labelledby="proof-heading"><div className="scouter-band-heading"><h2 id="proof-heading"><Upload size={18} /> Submit an earning</h2><span>{proofs.length} submitted</span></div>
       <form className="scouter-form scouter-proof-form" onSubmit={proofForm.handleSubmit((values) => { const file = values.proof.item(0); if (file) { setError(""); setMessage(""); proofMutation.mutate({ file, transaction: values.transaction }); } })} aria-busy={busy === "proof"}>
         <label htmlFor="scouter-transaction">Stellar transaction URL or hash</label><Input id="scouter-transaction" placeholder="https://stellar.expert/explorer/public/tx/..." disabled={Boolean(busy)} aria-invalid={Boolean(proofForm.formState.errors.transaction)} aria-describedby={`scouter-transaction-help${proofForm.formState.errors.transaction ? " scouter-transaction-error" : ""}`} {...proofForm.register("transaction")} /><p id="scouter-transaction-help" className="scouter-consent">We verify the amount, USDC issuer, and Plinger destination directly on Stellar.</p>{proofForm.formState.errors.transaction && <p id="scouter-transaction-error" className="scouter-field-error" role="alert">{proofForm.formState.errors.transaction.message}</p>}
-        <label htmlFor="scouter-proof">Drip Wave withdrawal confirmation</label><input id="scouter-proof" type="file" accept="image/png,image/jpeg,image/webp,application/pdf" required disabled={Boolean(busy)} aria-invalid={Boolean(proofForm.formState.errors.proof)} aria-describedby={proofForm.formState.errors.proof ? "scouter-proof-error" : undefined} {...proofForm.register("proof")} />{proofForm.formState.errors.proof && <p id="scouter-proof-error" className="scouter-field-error" role="alert">{proofForm.formState.errors.proof.message}</p>}<button type="submit" className="button button-black" disabled={!proofForm.formState.isValid || Boolean(busy)}>{busy === "proof" ? "Verifying transaction..." : "Verify and submit earning"}</button>
+        <label htmlFor="scouter-proof">Drip Wave withdrawal confirmation</label><DocumentUpload id="scouter-proof" file={selectedProof} disabled={Boolean(busy)} error={proofForm.formState.errors.proof?.message} onFiles={(files) => proofForm.setValue("proof", files, { shouldDirty: true, shouldTouch: true, shouldValidate: true })} /><button type="submit" className="button button-black" disabled={!proofForm.formState.isValid || Boolean(busy)}>{busy === "proof" ? "Verifying transaction..." : "Verify and submit earning"}</button>
       </form>
-      {proofs.length > 0 && <div className="scouter-earning-list">{proofs.map((item) => { const share = splitEarnings(item.amount_stroops ?? "0").scouter; return <article key={item.id}><div><strong>{item.amount_stroops ? formatUsd(item.amount_stroops) : "Legacy proof"}</strong><span>{item.transaction_created_at ? formatDate(item.transaction_created_at) : formatDate(item.created_at)}</span></div><div><strong>{item.amount_stroops ? formatUsd(share) : "\u2014"}</strong><span>Your 60% \u00b7 {item.amount_stroops ? formatNaira(share) : "Not calculated"}</span></div><div><span className={`badge ${item.status === "confirmed" ? "green" : item.status === "rejected" ? "red" : "amber"}`}>{item.status}</span>{item.status === "confirmed" && <span className={`badge ${item.payout_status === "paid" ? "green" : "neutral"}`}>{item.payout_status === "paid" ? "Paid" : "Payout due"}</span>}</div><div>{item.transaction_hash && <a href={`https://stellar.expert/explorer/public/tx/${item.transaction_hash}`} target="_blank" rel="noreferrer">Transaction <ArrowUpRight size={13} aria-hidden="true" /></a>}<a href={`/api/scouters/${encodeURIComponent(login)}/proofs/${item.id}`} target="_blank" rel="noreferrer">Proof <ArrowUpRight size={13} aria-hidden="true" /></a></div></article>; })}</div>}
+      {proofs.length > 0 && <div className="scouter-earning-list">{proofs.map((item) => { const share = splitEarnings(item.amount_stroops ?? "0").scouter; return <article key={item.id}><div><strong>{item.amount_stroops ? formatUsd(item.amount_stroops) : "Legacy proof"}</strong><span>{item.transaction_created_at ? formatDate(item.transaction_created_at) : formatDate(item.created_at)}</span></div><div><strong>{item.amount_stroops ? formatUsd(share) : "\u2014"}</strong><span>Your 60% \u00b7 {item.amount_stroops ? formatNaira(share, rateMicros) : "Not calculated"}</span></div><div><span className={`badge ${item.status === "confirmed" ? "green" : item.status === "rejected" ? "red" : "amber"}`}>{item.status}</span>{item.status === "confirmed" && <span className={`badge ${item.payout_status === "paid" ? "green" : "neutral"}`}>{item.payout_status === "paid" ? "Paid" : "Payout due"}</span>}</div><div>{item.transaction_hash && <a href={`https://stellar.expert/explorer/public/tx/${item.transaction_hash}`} target="_blank" rel="noreferrer">Transaction <ArrowUpRight size={13} aria-hidden="true" /></a>}<a href={`/api/scouters/${encodeURIComponent(login)}/proofs/${item.id}`} target="_blank" rel="noreferrer">Proof <ArrowUpRight size={13} aria-hidden="true" /></a></div></article>; })}</div>}
     </section>
     </>}
   </ScouterWorkspace>;
 }
 
 function formatDate(value: string | null) { return value ? new Date(value).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" }) : ""; }
+function formatRateDate(value: string) { return new Date(value).toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }); }

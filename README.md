@@ -232,8 +232,9 @@ successful USDC payment to Plinger's configured receiving account, and rejects
 transaction or operation IDs that have already been submitted.
 
 Verified submissions remain pending until an admin confirms them. Confirmed
-gross earnings are split 60% to the scouter and 40% to Plinger, with dashboard
-naira estimates calculated at the configured product rate of ₦1,400 per USD.
+gross earnings are split 60% to the scouter and 40% to Plinger. Dashboard naira
+estimates use the server-fetched USD/NGN market rate from ExchangeRate-API,
+cached for one hour, with ₦1,330.39 per USD as the outage fallback.
 Admins separately mark the scouter share as paid; rejected and pending claims
 do not contribute to confirmed totals. Scouters can only access their own
 earnings through the authenticated `/api/me/scouter` route, while the aggregate

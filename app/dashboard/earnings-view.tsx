@@ -1,11 +1,12 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowUpRight, BadgeDollarSign, Check, Clock3, RefreshCw, Users, WalletCards, X } from "lucide-react";
+import { AlertTriangle, ArrowUpRight, BadgeDollarSign, Check, Clock3, RefreshCw, Users, WalletCards, X } from "lucide-react";
 import { useMemo, useState } from "react";
 import { adminEarningsQueryKey, getAdminEarnings, updateEarning } from "../../lib/scouter/admin-client";
 import type { AdminEarningClaim, EarningsActionInput } from "../../lib/scouter/contracts";
-import { formatNaira, formatUsd, splitEarnings } from "../../lib/scouter/money";
+import { formatNaira, formatNairaRate, formatUsd, splitEarnings } from "../../lib/scouter/money";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "../ui/alert-dialog";
 
 export default function EarningsView({ totalScouters }: { totalScouters: number }) {
   const queryClient = useQueryClient();
@@ -34,23 +35,25 @@ export default function EarningsView({ totalScouters }: { totalScouters: number 
 
   if (earningsQuery.isPending) return <div className="earnings-state" role="status"><RefreshCw size={18} className="spinning" /> Loading earnings</div>;
   if (earningsQuery.error) return <div className="earnings-state" role="alert"><strong>Earnings are unavailable</strong><span>{earningsQuery.error instanceof Error ? earningsQuery.error.message : "Try again."}</span><button type="button" className="button button-white" onClick={() => earningsQuery.refetch()}>Retry</button></div>;
+  const exchangeRate = earningsQuery.data.exchangeRate;
+  const rateMicros = exchangeRate.rateMicros;
 
   return <section className="earnings-view" aria-labelledby="earnings-overview-heading">
     {(message || error) && <p className={`scouter-notice ${error ? "error" : ""}`} role={error ? "alert" : "status"}>{error || message}</p>}
     <h2 id="earnings-overview-heading" className="sr-only">Earnings overview</h2>
-    <div className="earnings-toolbar"><p>Confirmed amounts use a fixed rate of {"\u20a6"}1,400 per USD.</p><button type="button" className="button button-white" disabled={earningsQuery.isFetching} aria-busy={earningsQuery.isFetching} onClick={() => earningsQuery.refetch()}><RefreshCw size={15} className={earningsQuery.isFetching ? "spinning" : ""} aria-hidden="true" /> {earningsQuery.isFetching ? "Refreshing" : "Refresh earnings"}</button></div>
+    <div className="earnings-toolbar"><p>Naira estimates use {formatNairaRate(rateMicros)}{exchangeRate.isFallback ? " fallback rate" : exchangeRate.updatedAt ? ` market rate updated ${formatRateDate(exchangeRate.updatedAt)}` : " market rate"}. <a href={exchangeRate.sourceUrl} target="_blank" rel="noreferrer">Rates by Exchange Rate API <ArrowUpRight size={12} aria-hidden="true" /></a></p><button type="button" className="button button-white" disabled={earningsQuery.isFetching} aria-busy={earningsQuery.isFetching} onClick={() => earningsQuery.refetch()}><RefreshCw size={15} className={earningsQuery.isFetching ? "spinning" : ""} aria-hidden="true" /> {earningsQuery.isFetching ? "Refreshing" : "Refresh earnings"}</button></div>
     <div className="earnings-summary" aria-label="Earnings totals">
       <SummaryCard label="Scouters" value={String(totalScouters)} detail={`${scouters.length} with submissions`} icon={Users} />
-      <SummaryCard label="Confirmed gross" value={formatUsd(totals.gross)} detail={`${formatNaira(totals.gross)} at \u20a61,400/$`} icon={BadgeDollarSign} />
-      <SummaryCard label="Scouter share" value={formatUsd(totals.scouter)} detail={`${formatNaira(totals.scouter)} \u00b7 60%`} icon={WalletCards} tone="green" />
-      <SummaryCard label="Plinger share" value={formatUsd(totals.admin)} detail={`${formatNaira(totals.admin)} \u00b7 40%`} icon={BadgeDollarSign} tone="purple" />
+      <SummaryCard label="Confirmed gross" value={formatUsd(totals.gross)} detail={`${formatNaira(totals.gross, rateMicros)} at ${formatNairaRate(rateMicros)}`} icon={BadgeDollarSign} />
+      <SummaryCard label="Scouter share" value={formatUsd(totals.scouter)} detail={`${formatNaira(totals.scouter, rateMicros)} \u00b7 60%`} icon={WalletCards} tone="green" />
+      <SummaryCard label="Plinger share" value={formatUsd(totals.admin)} detail={`${formatNaira(totals.admin, rateMicros)} \u00b7 40%`} icon={BadgeDollarSign} tone="purple" />
       <SummaryCard label="Fully paid" value={String(paidScouters)} detail="No confirmed balance due" icon={Check} tone="green" />
       <SummaryCard label="Awaiting payout" value={String(unpaidScouters)} detail="Confirmed balance outstanding" icon={Clock3} tone="amber" />
     </div>
 
     <section className="earnings-panel">
       <div className="earnings-panel-heading"><div><p className="overline">60 / 40 SPLIT</p><h2>Scouter balances</h2></div><span>{scouters.length} earning scouter{scouters.length === 1 ? "" : "s"}</span></div>
-      {scouters.length ? <div className="earnings-table-wrap"><table className="earnings-table"><thead><tr><th scope="col">Scouter</th><th scope="col">Confirmed gross</th><th scope="col">Scouter 60%</th><th scope="col">Plinger 40%</th><th scope="col">Outstanding</th><th scope="col">Status</th></tr></thead><tbody>{scouters.map((row) => <tr key={row.accountId}><td><strong>{row.login}</strong><small>{row.claims} submission{row.claims === 1 ? "" : "s"}{row.pending > 0n ? ` \u00b7 ${formatUsd(row.pending)} pending` : ""}</small></td><td>{formatUsd(row.confirmed)}<small>{formatNaira(row.confirmed)}</small></td><td>{formatUsd(splitEarnings(row.confirmed).scouter)}<small>{formatNaira(splitEarnings(row.confirmed).scouter)}</small></td><td>{formatUsd(splitEarnings(row.confirmed).admin)}<small>{formatNaira(splitEarnings(row.confirmed).admin)}</small></td><td>{formatUsd(row.outstanding)}<small>{formatNaira(row.outstanding)}</small></td><td><span className={`badge ${row.confirmed === 0n ? "amber" : row.outstanding > 0n ? "red" : "green"}`}>{row.confirmed === 0n ? "Pending review" : row.outstanding > 0n ? "Payout due" : "Paid"}</span></td></tr>)}</tbody></table></div> : <p className="earnings-empty">No earnings have been submitted yet.</p>}
+      {scouters.length ? <div className="earnings-table-wrap"><table className="earnings-table"><thead><tr><th scope="col">Scouter</th><th scope="col">Confirmed gross</th><th scope="col">Scouter 60%</th><th scope="col">Plinger 40%</th><th scope="col">Outstanding</th><th scope="col">Status</th></tr></thead><tbody>{scouters.map((row) => <tr key={row.accountId}><td><strong>{row.login}</strong><small>{row.claims} submission{row.claims === 1 ? "" : "s"}{row.pending > 0n ? ` \u00b7 ${formatUsd(row.pending)} pending` : ""}</small></td><td>{formatUsd(row.confirmed)}<small>{formatNaira(row.confirmed, rateMicros)}</small></td><td>{formatUsd(splitEarnings(row.confirmed).scouter)}<small>{formatNaira(splitEarnings(row.confirmed).scouter, rateMicros)}</small></td><td>{formatUsd(splitEarnings(row.confirmed).admin)}<small>{formatNaira(splitEarnings(row.confirmed).admin, rateMicros)}</small></td><td>{formatUsd(row.outstanding)}<small>{formatNaira(row.outstanding, rateMicros)}</small></td><td><span className={`badge ${row.confirmed === 0n ? "amber" : row.outstanding > 0n ? "red" : "green"}`}>{row.confirmed === 0n ? "Pending review" : row.outstanding > 0n ? "Payout due" : "Paid"}</span></td></tr>)}</tbody></table></div> : <p className="earnings-empty">No earnings have been submitted yet.</p>}
     </section>
 
     <section className="earnings-panel">
@@ -67,17 +70,60 @@ function SummaryCard({ label, value, detail, icon: Icon, tone = "neutral" }: { l
 function ClaimRow({ claim, busy, update }: { claim: AdminEarningClaim; busy: boolean; update: (input: EarningsActionInput) => void }) {
   const split = splitEarnings(claim.amount_stroops ?? "0");
   const login = claim.profile?.account_login ?? `GitHub ID ${claim.account_id}`;
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [pendingAction, setPendingAction] = useState<EarningsActionInput | null>(null);
+  const confirmation = pendingAction ? confirmationCopy(pendingAction, login, split.gross, split.scouter) : null;
   return <article className="earning-claim">
-    <div className="earning-claim-main"><span className="earning-avatar" aria-hidden="true">{login.slice(0, 1).toUpperCase()}</span><div><strong>{login}</strong><span>{claim.profile?.bank_name ? `${claim.profile.bank_name} \u00b7 ${claim.profile.bank_account_number}` : "Bank details not added"}</span><span>{formatDate(claim.transaction_created_at ?? claim.created_at)} \u00b7 Ledger {claim.ledger ?? "\u2014"}</span></div></div>
+    <div className="earning-claim-main"><span className="earning-avatar" aria-hidden="true"><span>{login.slice(0, 1).toUpperCase()}</span><img src={`https://avatars.githubusercontent.com/u/${claim.account_id}?s=68&v=4`} width={34} height={34} alt="" loading="lazy" onError={(event) => { event.currentTarget.hidden = true; }} /></span><div><strong>{login}</strong><span>{claim.profile?.bank_name ? `${claim.profile.bank_name} \u00b7 ${claim.profile.bank_account_number}` : "Bank details not added"}</span><span>{formatDate(claim.transaction_created_at ?? claim.created_at)} \u00b7 Ledger {claim.ledger ?? "\u2014"}</span></div></div>
     <div className="earning-claim-money"><strong>{formatUsd(split.gross)}</strong><span>{formatUsd(split.scouter)} scouter \u00b7 {formatUsd(split.admin)} Plinger</span><div className="earning-split" aria-label="60 percent scouter, 40 percent Plinger"><span /><span /></div></div>
     <div className="earning-claim-links"><a href={`https://stellar.expert/explorer/public/tx/${claim.transaction_hash}`} target="_blank" rel="noreferrer">Stellar <ArrowUpRight size={13} aria-hidden="true" /></a><a href={`/api/scouters/${encodeURIComponent(login)}/proofs/${claim.id}`} target="_blank" rel="noreferrer">Proof <ArrowUpRight size={13} aria-hidden="true" /></a></div>
     <div className="earning-claim-status"><span className={`badge ${claim.status === "confirmed" ? "green" : claim.status === "rejected" ? "red" : "amber"}`}>{claim.status}</span>{claim.status === "confirmed" && <span className={`badge ${claim.payout_status === "paid" ? "green" : "neutral"}`}>{claim.payout_status === "paid" ? "Paid" : "Payout due"}</span>}</div>
-    <div className="earning-claim-actions" aria-label={`Actions for ${login}'s ${formatUsd(split.gross)} earning`}>
-      {claim.status !== "confirmed" && <button type="button" className="button button-white" disabled={busy} onClick={() => update({ action: "review", status: "confirmed" })}><Check size={14} aria-hidden="true" /> Confirm</button>}
-      {claim.status !== "rejected" && <button type="button" className="button button-white" disabled={busy} onClick={() => update({ action: "review", status: "rejected" })}><X size={14} aria-hidden="true" /> Reject</button>}
-      {claim.status === "confirmed" && <button type="button" className="button button-black" disabled={busy} onClick={() => update({ action: "payout", status: claim.payout_status === "paid" ? "unpaid" : "paid" })}>{claim.payout_status === "paid" ? "Mark unpaid" : "Mark paid"}</button>}
-    </div>
+    <AlertDialog open={dialogOpen} onOpenChange={(open) => { setDialogOpen(open); if (!open) setPendingAction(null); }}>
+      <div className="earning-claim-actions" aria-label={`Actions for ${login}'s ${formatUsd(split.gross)} earning`}>
+        {claim.status !== "confirmed" && <AlertDialogTrigger asChild><button type="button" className="button button-white" disabled={busy} onClick={() => setPendingAction({ action: "review", status: "confirmed" })}><Check size={14} aria-hidden="true" /> Confirm</button></AlertDialogTrigger>}
+        {claim.status !== "rejected" && <AlertDialogTrigger asChild><button type="button" className="button button-white" disabled={busy} onClick={() => setPendingAction({ action: "review", status: "rejected" })}><X size={14} aria-hidden="true" /> Reject</button></AlertDialogTrigger>}
+        {claim.status === "confirmed" && <AlertDialogTrigger asChild><button type="button" className="button button-black" disabled={busy} onClick={() => setPendingAction({ action: "payout", status: claim.payout_status === "paid" ? "unpaid" : "paid" })}>{claim.payout_status === "paid" ? "Mark unpaid" : "Mark paid"}</button></AlertDialogTrigger>}
+      </div>
+      {confirmation && <AlertDialogContent>
+        <AlertDialogHeader>
+          <span className={`alert-dialog-icon ${confirmation.danger ? "danger" : ""}`} aria-hidden="true"><AlertTriangle size={20} /></span>
+          <AlertDialogTitle>{confirmation.title}</AlertDialogTitle>
+          <AlertDialogDescription>{confirmation.description}</AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel className="button button-white" disabled={busy}>Cancel</AlertDialogCancel>
+          <AlertDialogAction className={`button ${confirmation.danger ? "alert-dialog-danger" : "button-black"}`} disabled={busy} onClick={() => update(pendingAction!)}>{confirmation.confirmLabel}</AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>}
+    </AlertDialog>
   </article>;
+}
+
+function confirmationCopy(action: EarningsActionInput, login: string, gross: bigint, scouterShare: bigint) {
+  if (action.action === "review" && action.status === "confirmed") return {
+    title: "Confirm this earning?",
+    description: `${formatUsd(gross)} for ${login} will be included in confirmed totals, with ${formatUsd(scouterShare)} eligible for payout.`,
+    confirmLabel: "Confirm earning",
+    danger: false,
+  };
+  if (action.action === "review" && action.status === "rejected") return {
+    title: "Reject this earning?",
+    description: `${formatUsd(gross)} for ${login} will be excluded from confirmed earnings and payout balances. You can confirm it later if needed.`,
+    confirmLabel: "Reject earning",
+    danger: true,
+  };
+  if (action.action === "payout" && action.status === "paid") return {
+    title: "Mark this payout as paid?",
+    description: `Confirm only after ${formatUsd(scouterShare)} has been sent to ${login}. This removes it from the outstanding balance.`,
+    confirmLabel: "Mark paid",
+    danger: false,
+  };
+  return {
+    title: "Mark this payout as unpaid?",
+    description: `${formatUsd(scouterShare)} for ${login} will return to the outstanding payout balance.`,
+    confirmLabel: "Mark unpaid",
+    danger: false,
+  };
 }
 
 function aggregateScouters(claims: AdminEarningClaim[]) {
@@ -101,3 +147,4 @@ function sumClaims(claims: AdminEarningClaim[]) {
 }
 
 function formatDate(value: string) { return new Date(value).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" }); }
+function formatRateDate(value: string) { return new Date(value).toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }); }
