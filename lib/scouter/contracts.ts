@@ -19,9 +19,14 @@ export const bankDetailsSchema = z.object({
 
 export const scouterUpdateSchema = z.discriminatedUnion("kind", [githubPatSchema, bankDetailsSchema]);
 export const proofReviewSchema = z.object({ status: z.enum(["confirmed", "rejected", "pending"]) });
+export const earningsActionSchema = z.discriminatedUnion("action", [
+  z.object({ action: z.literal("review"), status: z.enum(["confirmed", "rejected", "pending"]) }),
+  z.object({ action: z.literal("payout"), status: z.enum(["paid", "unpaid"]) }),
+]);
 
 const proofTypes = ["image/png", "image/jpeg", "image/webp", "application/pdf"];
 export const withdrawalProofFormSchema = z.object({
+  transaction: z.string().trim().min(1, "Enter the Stellar transaction URL or hash").max(300, "Transaction reference is too long"),
   proof: z
     .custom<FileList>((value) => typeof FileList !== "undefined" && value instanceof FileList && value.length === 1, "Choose a withdrawal proof")
     .refine((files) => Boolean(files.item(0)?.size && files.item(0)!.size <= 10 * 1024 * 1024), "Upload a file up to 10 MB")
@@ -31,6 +36,7 @@ export const withdrawalProofFormSchema = z.object({
 export type GithubPatInput = z.infer<typeof githubPatSchema>;
 export type BankDetailsInput = z.infer<typeof bankDetailsSchema>;
 export type ProofReviewInput = z.infer<typeof proofReviewSchema>;
+export type EarningsActionInput = z.infer<typeof earningsActionSchema>;
 export type WithdrawalProofFormInput = z.infer<typeof withdrawalProofFormSchema>;
 
 export type ScouterPrivateState = {
@@ -48,7 +54,31 @@ export type WithdrawalProofSummary = {
   status: string;
   created_at: string;
   reviewed_at: string | null;
+  transaction_hash: string | null;
+  amount_stroops: string | null;
+  asset_code: string | null;
+  source_account: string | null;
+  destination_account: string | null;
+  ledger: number | null;
+  transaction_created_at: string | null;
+  chain_verified_at: string | null;
+  payout_status: "unpaid" | "paid";
+  paid_at: string | null;
 };
+
+export type AdminEarningClaim = WithdrawalProofSummary & {
+  account_id: number;
+  operation_id: string;
+  profile: {
+    account_id: number;
+    account_login: string;
+    bank_name: string | null;
+    bank_account_name: string | null;
+    bank_account_number: string | null;
+  } | null;
+};
+
+export type AdminEarningsData = { claims: AdminEarningClaim[] };
 
 export type ScouterPortalData = {
   work: ScouterProfile | null;

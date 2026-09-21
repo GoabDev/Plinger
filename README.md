@@ -222,6 +222,23 @@ Issue assignment totals use the latest stored assignee list, not a historical
 assignment ledger. An issue unassigned later will no longer count for that
 scouter.
 
+## Verified Earnings
+
+Apply `supabase/migrations/20260921073608_add_verified_scouter_earnings.sql`
+before using the Earnings views. A scouter submits both a Stellar Expert public
+transaction URL (or transaction hash) and a Drip Wave withdrawal proof. The
+server verifies the transaction against Stellar Horizon, accepts only a
+successful USDC payment to Plinger's configured receiving account, and rejects
+transaction or operation IDs that have already been submitted.
+
+Verified submissions remain pending until an admin confirms them. Confirmed
+gross earnings are split 60% to the scouter and 40% to Plinger, with dashboard
+naira estimates calculated at the configured product rate of ₦1,400 per USD.
+Admins separately mark the scouter share as paid; rejected and pending claims
+do not contribute to confirmed totals. Scouters can only access their own
+earnings through the authenticated `/api/me/scouter` route, while the aggregate
+earnings API requires the configured admin account.
+
 The admin directory shows a purple dot beside installation status when a matching
 GitHub identity has a recorded Supabase Auth sign-in. This includes existing
 users and means they have signed into Plinger, not that they are currently online.

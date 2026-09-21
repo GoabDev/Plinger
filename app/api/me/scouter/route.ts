@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { currentScouter, encryptPat, PatEncryptionConfigurationError, readPrivateProfile, readProofs, safeProfile, sameOrigin, serviceClient } from "../../../../lib/scouter/portal";
 import { getScouterProfile } from "../../../../lib/dashboard/scouters";
 import { scouterUpdateSchema } from "../../../../lib/scouter/contracts";
+import { publicProof } from "../../../../lib/scouter/earnings";
 
 export const runtime = "nodejs";
 
@@ -14,7 +15,7 @@ export async function GET() {
       readPrivateProfile(current.scouter.account_id),
       readProofs(current.scouter.account_id),
     ]);
-    return NextResponse.json({ work, profile: safeProfile(privateProfile), proofs: proofs.map(({ storage_path, ...proof }) => proof) }, { headers: { "Cache-Control": "private, no-store" } });
+    return NextResponse.json({ work, profile: safeProfile(privateProfile), proofs: proofs.map(publicProof) }, { headers: { "Cache-Control": "private, no-store" } });
   } catch (error) {
     console.error("[scouter:self:failed]", error);
     return NextResponse.json({ error: "Scouter data is unavailable" }, { status: 503 });

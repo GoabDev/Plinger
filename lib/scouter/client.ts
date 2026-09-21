@@ -17,9 +17,10 @@ export async function updateScouterProfile(input: GithubPatInput | BankDetailsIn
   return responseJson<{ ok: true }>(response);
 }
 
-export async function uploadWithdrawalProof(file: File) {
+export async function uploadWithdrawalProof({ file, transaction }: { file: File; transaction: string }) {
   const form = new FormData();
   form.append("proof", file);
+  form.append("transaction", transaction);
   const response = await fetch("/api/me/scouter/proofs", { method: "POST", body: form });
   return responseJson<{ ok: true }>(response);
 }

@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useState, type ReactNode } from "react";
-import { ArrowUpRight, ChevronRight, CircleDot, LayoutDashboard, LockKeyhole, LogOut, Menu, Wallet } from "lucide-react";
+import { ArrowUpRight, BadgeDollarSign, ChevronRight, CircleDot, LayoutDashboard, LockKeyhole, LogOut, Menu } from "lucide-react";
 import { Brand } from "../ui/brand";
 import { signOutScouter } from "./login/actions";
 import { ThemeToggle } from "../ui/theme-toggle";
@@ -10,7 +10,7 @@ export const scouterViews = [
   { id: "overview", label: "Overview", icon: LayoutDashboard },
   { id: "work", label: "My work", icon: CircleDot },
   { id: "pat", label: "GitHub PAT", icon: LockKeyhole },
-  { id: "withdrawals", label: "Withdrawals", icon: Wallet },
+  { id: "earnings", label: "Earnings", icon: BadgeDollarSign },
 ] as const;
 export type ScouterView = typeof scouterViews[number]["id"];
 

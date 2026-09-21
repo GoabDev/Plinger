@@ -18,6 +18,7 @@ import {
   GitCommitHorizontal,
   GitMerge,
   GitPullRequest,
+  BadgeDollarSign,
   Inbox,
   LayoutDashboard,
   LockKeyhole,
@@ -42,6 +43,7 @@ import { prStatus } from "../../lib/dashboard/status";
 import { githubSyncMutationKey, syncGitHub } from "../../lib/github/client";
 import type { ScouterRow } from "../../lib/dashboard/scouters";
 import ScoutersView from "./scouters-view";
+import EarningsView from "./earnings-view";
 import { Brand } from "../ui/brand";
 import { ThemeToggle } from "../ui/theme-toggle";
 import { signOut } from "../login/actions";
@@ -61,7 +63,8 @@ type View =
   | "closed-issues"
   | "pull-requests"
   | "merged"
-  | "scouters";
+  | "scouters"
+  | "earnings";
 type Props = {
   repositories: RepositoryRow[];
   issues: IssueRow[];
@@ -83,6 +86,7 @@ const navigation: { id: View; label: string; icon: LucideIcon }[] = [
   { id: "activity", label: "Activity", icon: Activity },
   { id: "repositories", label: "Repositories", icon: BookOpen },
   { id: "scouters", label: "Scouters", icon: Users },
+  { id: "earnings", label: "Earnings", icon: BadgeDollarSign },
   { id: "issues", label: "Open issues", icon: CircleDot },
   { id: "closed-issues", label: "Closed issues", icon: Check },
   { id: "pull-requests", label: "Pull requests", icon: GitPullRequest },
@@ -93,6 +97,7 @@ const subtitles: Record<View, string> = {
   activity: "The latest updates from your connected repositories.",
   repositories: "Your recently updated repositories, together in one place.",
   scouters: "Personal GitHub accounts connected to Plinger and their work.",
+  earnings: "Verified withdrawals, the 60/40 split, and scouter payouts.",
   issues: "Open work, assignments, and the details that matter.",
   "closed-issues": "Recently closed issues across your repositories.",
   "pull-requests":
@@ -363,7 +368,7 @@ export default function DashboardWorkspace({
               <h1>{title}</h1>
               <p>{subtitles[view]}</p>
             </div>
-            <div className="heading-actions">
+            {view !== "earnings" && <div className="heading-actions">
               <button
                 className="button button-white"
                 onClick={refresh}
@@ -382,7 +387,7 @@ export default function DashboardWorkspace({
                 <Plus size={16} />
                 Connect repository
               </a>
-            </div>
+            </div>}
           </div>
           <AnimatePresence initial={false}>
             {syncMessage ? (
@@ -447,7 +452,7 @@ export default function DashboardWorkspace({
               />
             </section>
           )}
-          {view !== "scouters" && <div className="workspace-toolbar">
+          {view !== "scouters" && view !== "earnings" && <div className="workspace-toolbar">
             <label className="search-field">
               <Search size={17} />
               <input
@@ -481,7 +486,8 @@ export default function DashboardWorkspace({
           {view === "scouters" && (
             <ScoutersView scouters={scouters} total={scouterCount} unavailable={scoutersUnavailable} historyUnavailable={scouterHistoryUnavailable} refreshKey={fetchedAt} />
           )}
-          {view !== "scouters" && <div
+          {view === "earnings" && <EarningsView totalScouters={scouterCount} />}
+          {view !== "scouters" && view !== "earnings" && <div
             aria-busy={pending}
             className={view === "overview" ? "overview-grid" : "single-view"}
           >

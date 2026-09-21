@@ -55,7 +55,12 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ lo
     if (!parsed.success) return NextResponse.json({ error: "Invalid status" }, { status: 400 });
     const body = parsed.data;
     const { error } = await context.client.from("scouter_withdrawal_proofs")
-      .update({ status: body.status, reviewed_at: body.status === "pending" ? null : new Date().toISOString() })
+      .update({
+        status: body.status,
+        reviewed_at: body.status === "pending" ? null : new Date().toISOString(),
+        reviewed_by: body.status === "pending" ? null : data.user!.id,
+        ...(body.status !== "confirmed" ? { payout_status: "unpaid", paid_at: null, paid_by: null } : {}),
+      })
       .eq("id", id).eq("account_id", context.proof.account_id);
     if (error) throw error;
     return NextResponse.json({ ok: true }, { headers: { "Cache-Control": "private, no-store" } });
