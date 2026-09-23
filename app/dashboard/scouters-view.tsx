@@ -252,18 +252,19 @@ export default function ScoutersView({
 }
 
 function AssignmentCoverage({ sync }: { sync: ScouterIssueSyncState }) {
-  const complete = sync.status === "complete" && sync.coverage === "all_visible_repositories";
+  const complete = sync.status === "complete" && sync.coverage === "all_visible_repositories" &&
+    sync.issue_status === "complete" && sync.pull_request_status === "complete";
   const detail = complete
-    ? `Complete across repositories visible to the scouter credential${sync.last_completed_at ? `; synced ${formatDate(sync.last_completed_at)}` : ""}.`
+    ? `Complete across repositories visible to the Scouter credential: ${sync.issues_seen} assigned issues, ${sync.pull_requests_seen} authored PRs, and ${sync.links_seen} issue links${sync.last_completed_at ? `; synced ${formatDate(sync.last_completed_at)}` : ""}.`
     : sync.status === "syncing"
-      ? `Full assignment sync is in progress; ${sync.issues_seen} issues checked.`
+      ? `Full work sync is checking ${sync.phase === "issues" ? "assigned issues and their links" : "authored pull requests and closing issues"}; ${sync.issues_seen} issues, ${sync.pull_requests_seen} authored PRs, and ${sync.links_seen} links recorded so far.`
       : sync.status === "failed"
-        ? `The last full assignment sync failed${sync.last_error ? `: ${sync.last_error}` : "."}`
+        ? `The last ${sync.phase === "issues" ? "issue" : "pull request"} sync failed${sync.last_error ? `: ${sync.last_error}` : "."}`
         : sync.status === "stale"
-          ? `The last complete assignment sync is stale${sync.last_completed_at ? `; last completed ${formatDate(sync.last_completed_at)}` : ""}.`
+          ? `The last complete work sync is stale${sync.last_completed_at ? `; last completed ${formatDate(sync.last_completed_at)}` : ""}.`
           : sync.status === "pending"
-            ? "Full assignment sync is queued. Current results may be incomplete."
-            : "Coverage is limited to issues already captured from connected repositories.";
+            ? "Full issue and pull request sync is queued. Current results may be incomplete."
+            : "Coverage is limited to work already captured from connected repositories.";
   return <p className={`assignment-coverage ${complete ? "complete" : "limited"}`} role="status">{detail}</p>;
 }
 
