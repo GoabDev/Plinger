@@ -3,6 +3,11 @@ import "server-only";
 import { randomUUID } from "node:crypto";
 import { decryptPat, serviceClient } from "../scouter/portal";
 import { getGitHubTokenOwner } from "./api";
+import {
+  fetchAssignedIssuesPage,
+  type GitHubAssignedIssue,
+  type GitHubRepository,
+} from "./assigned-issue-search";
 
 type ScouterTokenRow = {
   account_id: number;
@@ -19,32 +24,6 @@ type SyncStateRow = {
   issues_seen: number;
   last_completed_at: string | null;
   updated_at: string;
-};
-
-type GitHubUser = { id?: number; login?: string };
-type GitHubRepository = {
-  id?: number;
-  name?: string;
-  full_name?: string;
-  private?: boolean;
-  default_branch?: string;
-  archived?: boolean;
-  disabled?: boolean;
-  owner?: GitHubUser;
-};
-type GitHubAssignedIssue = {
-  id?: number;
-  number?: number;
-  title?: string;
-  state?: string;
-  html_url?: string;
-  created_at?: string;
-  closed_at?: string | null;
-  updated_at?: string;
-  assignees?: GitHubUser[];
-  labels?: Array<string | { name?: string }>;
-  repository?: GitHubRepository;
-  pull_request?: unknown;
 };
 
 export type AssignmentSyncResult = {
@@ -246,11 +225,17 @@ async function syncScouterAssignments(
   if (tokenOwner.id !== Number(profile.account_id)) {
     throw new Error(`GitHub token belongs to @${tokenOwner.login}, not @${profile.account_login}`);
   }
+  const repositoryCache = new Map<string, GitHubRepository>();
   let pagesChecked = 0;
   let issuesChecked = 0;
   while (pagesChecked < maxPages) {
-    const response = await fetchAssignedIssuesPage(pat, page);
-    const issues = response.issues.filter((issue) => !issue.pull_request);
+    const response = await fetchAssignedIssuesPage({
+      token: pat,
+      login: tokenOwner.login,
+      page,
+      repositoryCache,
+    });
+    const issues = response.issues;
     await storeAssignedIssuePage(profile, runId, issues);
     pagesChecked++;
     issuesChecked += issues.length;
@@ -273,31 +258,6 @@ async function syncScouterAssignments(
   }
 
   return { pagesChecked, issuesChecked, complete: false };
-}
-
-async function fetchAssignedIssuesPage(token: string, page: number) {
-  const url = new URL("https://api.github.com/issues");
-  url.searchParams.set("filter", "assigned");
-  url.searchParams.set("state", "all");
-  url.searchParams.set("sort", "created");
-  url.searchParams.set("direction", "asc");
-  url.searchParams.set("per_page", "100");
-  url.searchParams.set("page", String(page));
-  const response = await fetch(url, {
-    headers: {
-      authorization: `Bearer ${token}`,
-      accept: "application/vnd.github+json",
-      "x-github-api-version": "2022-11-28",
-      "user-agent": "Plinger",
-    },
-    cache: "no-store",
-    signal: AbortSignal.timeout(15_000),
-  });
-  if (!response.ok) throw new Error(`GitHub assigned issues: ${response.status}`);
-  return {
-    issues: await response.json() as GitHubAssignedIssue[],
-    hasNextPage: /<[^>]+>;\s*rel="next"/.test(response.headers.get("link") ?? ""),
-  };
 }
 
 async function storeAssignedIssuePage(profile: ScouterTokenRow, runId: string, issues: GitHubAssignedIssue[]) {
@@ -407,7 +367,6 @@ function uniqueRepositories(issues: GitHubAssignedIssue[]) {
       private: repository.private ?? false,
       default_branch: repository.default_branch ?? null,
       archived: repository.archived ?? false,
-      disabled: repository.disabled ?? false,
       updated_at: new Date().toISOString(),
     });
   }

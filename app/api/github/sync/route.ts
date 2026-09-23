@@ -51,22 +51,31 @@ export async function POST(request: Request) {
   }
 
   const assignmentSyncPromise = syncScouterAssignmentsBatch({
-    maxScouters: mode === "full" ? 2 : 1,
+    maxScouters: mode === "full" ? 5 : 3,
     maxPagesPerScouter: mode === "full" ? 10 : 2,
   }).catch((error) => {
     console.error("[github:assignment-sync:batch-failed]", error);
     return { scoutersChecked: 0, pagesChecked: 0, issuesChecked: 0, completed: 0, failed: 1 };
   });
 
+  async function syncFailureResponse(error: string, detail?: unknown) {
+    console.error("[github:sync:aborted]", { error, detail });
+    const assignmentSync = await assignmentSyncPromise;
+    return NextResponse.json({ error, mode, assignmentSync }, { status: 503 });
+  }
+
   const repositories = mode === "full" ? await selectSupabaseRows<RepositoryRow>({
     table: "repositories",
     query: { select: "full_name", disabled: "eq.false", order: "updated_at.desc", limit: "10" },
   }) : { data: [] as RepositoryRow[] };
-  if (repositories.skipped || repositories.error) return NextResponse.json({ error: "Could not load repositories" }, { status: 503 });
+  if (repositories.skipped || repositories.error) {
+    return syncFailureResponse("Could not load repositories", repositories.error);
+  }
 
   const installationCache = new Map<string, number | null>();
   const failures: string[] = [];
   const skipped: string[] = [];
+  const warnings: string[] = [];
   let checked = 0;
   async function getInstallationId(fullName: string) {
       let installationId = installationCache.get(fullName);
@@ -143,44 +152,61 @@ export async function POST(request: Request) {
     count: "exact",
   });
   if (linkCount.skipped || linkCount.error || linkCount.count === undefined) {
-    return NextResponse.json({ error: "Could not count linked PRs" }, { status: 503 });
-  }
-  const pageCount = Math.ceil(linkCount.count / 20);
-  const offset = mode === "poll" && pageCount
-    ? (Math.floor(Date.now() / 900_000) % pageCount) * 20
-    : 0;
-  const links = await selectSupabaseRows<LinkRow>({
-    table: "issue_pull_requests",
-    query: {
-      select: "github_pull_request_id",
-      order: mode === "poll" ? "github_issue_id.asc,github_pull_request_id.asc" : "updated_at.desc",
-      limit: "20",
-      offset: String(offset),
-    },
-  });
-  if (links.skipped || links.error) return NextResponse.json({ error: "Could not load linked PRs" }, { status: 503 });
-  const ids = [...new Set(links.data.map((link) => link.github_pull_request_id))];
-  if (ids.length) {
-    const prs = await selectSupabaseRows<WorkRow>({
-      table: "pull_requests",
+    console.error("[github:sync:linked-pr-count-failed]", { error: linkCount.error, skipped: linkCount.skipped });
+    warnings.push("linked-pull-requests");
+  } else {
+    const pageCount = Math.ceil(linkCount.count / 20);
+    const offset = mode === "poll" && pageCount
+      ? (Math.floor(Date.now() / 900_000) % pageCount) * 20
+      : 0;
+    const links = await selectSupabaseRows<LinkRow>({
+      table: "issue_pull_requests",
       query: {
-        select: "url,github_pull_request_number",
-        github_pull_request_id: `in.(${ids.join(",")})`,
-        state: "eq.open",
+        select: "github_pull_request_id",
+        order: mode === "poll" ? "github_issue_id.asc,github_pull_request_id.asc" : "updated_at.desc",
         limit: "20",
+        offset: String(offset),
       },
     });
-    if (prs.skipped || prs.error) return NextResponse.json({ error: "Could not load linked PRs" }, { status: 503 });
-    for (let i = 0; i < prs.data.length; i += 2) {
-      await Promise.all(prs.data.slice(i, i + 2).map(syncPr));
+    if (links.skipped || links.error) {
+      console.error("[github:sync:linked-pr-load-failed]", { error: links.error, skipped: links.skipped });
+      warnings.push("linked-pull-requests");
+    } else {
+      const ids = [...new Set(links.data.map((link) => link.github_pull_request_id))];
+      if (ids.length) {
+        const prs = await selectSupabaseRows<WorkRow>({
+          table: "pull_requests",
+          query: {
+            select: "url,github_pull_request_number",
+            github_pull_request_id: `in.(${ids.join(",")})`,
+            state: "eq.open",
+            limit: "20",
+          },
+        });
+        if (prs.skipped || prs.error) {
+          console.error("[github:sync:linked-pr-load-failed]", { error: prs.error, skipped: prs.skipped });
+          warnings.push("linked-pull-requests");
+        } else {
+          for (let i = 0; i < prs.data.length; i += 2) {
+            await Promise.all(prs.data.slice(i, i + 2).map(syncPr));
+          }
+        }
+      }
     }
   }
 
   const assignmentSync = await assignmentSyncPromise;
-  const failed = failures.length;
+  const failed = failures.length + assignmentSync.failed;
   return NextResponse.json(
-    { checked, failed, skipped: [...new Set(skipped)].length, mode, assignmentSync },
-    { status: failed ? (authorization !== null ? 503 : 207) : 200 },
+    {
+      checked,
+      failed,
+      skipped: [...new Set(skipped)].length,
+      warnings: [...new Set(warnings)],
+      mode,
+      assignmentSync,
+    },
+    { status: failed ? (authorization !== null ? 503 : 207) : warnings.length ? 207 : 200 },
   );
 }
 
