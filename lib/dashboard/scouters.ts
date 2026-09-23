@@ -20,10 +20,18 @@ export type ScouterList<T> = { data: T[]; count: number };
 export type ScouterIssueSyncState = {
   status: "pending" | "syncing" | "complete" | "stale" | "token_required" | "failed";
   coverage: "app_repositories_only" | "all_visible_repositories";
+  phase: "issues" | "pull_requests";
+  issue_status: "pending" | "syncing" | "complete" | "failed";
+  pull_request_status: "pending" | "syncing" | "complete" | "failed";
   pages_checked: number;
   issues_seen: number;
+  pull_request_pages_checked: number;
+  pull_requests_seen: number;
+  links_seen: number;
   last_completed_at: string | null;
   last_error: string | null;
+  issue_last_error: string | null;
+  pull_request_last_error: string | null;
 };
 
 export type ScouterProfile = {
@@ -44,7 +52,7 @@ const issueSelect = "id,github_issue_id,github_issue_number,title,state,url,assi
 const pullRequestSelect = "id,github_pull_request_id,github_pull_request_number,title,state,url,author_login,head_ref,base_ref,merged,merged_at,mergeable,mergeable_state,updated_at";
 const repositorySelect = "id,github_repository_id,owner_login,name,full_name,private,default_branch,archived,disabled,updated_at";
 const eventSelect = "id,delivery_id,event,action,repository_full_name,sender_login,received_at";
-const syncStateSelect = "status,coverage,pages_checked,issues_seen,last_completed_at,last_error";
+const syncStateSelect = "status,coverage,phase,issue_status,pull_request_status,pages_checked,issues_seen,pull_request_pages_checked,pull_requests_seen,links_seen,last_completed_at,last_error,issue_last_error,pull_request_last_error";
 
 function effectiveSyncState(state: ScouterIssueSyncState) {
   if (state.status !== "complete" || !state.last_completed_at) return state;
@@ -240,10 +248,18 @@ export async function getScouterProfile(login: string): Promise<ScouterProfile |
       : {
           status: "token_required",
           coverage: "app_repositories_only",
+          phase: "issues",
+          issue_status: "pending",
+          pull_request_status: "pending",
           pages_checked: 0,
           issues_seen: openIssues.count! + closedIssues.count!,
+          pull_request_pages_checked: 0,
+          pull_requests_seen: openPullRequests.count! + mergedPullRequests.count! + closedPullRequests.count!,
+          links_seen: links.data.length,
           last_completed_at: null,
           last_error: null,
+          issue_last_error: null,
+          pull_request_last_error: null,
         },
   };
 }

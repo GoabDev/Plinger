@@ -57,7 +57,15 @@ export async function POST(request: Request) {
     concurrency: 3,
   }).catch((error) => {
     console.error("[github:assignment-sync:batch-failed]", error);
-    return { scoutersChecked: 0, pagesChecked: 0, issuesChecked: 0, completed: 0, failed: 1 };
+    return {
+      scoutersChecked: 0,
+      pagesChecked: 0,
+      issuesChecked: 0,
+      pullRequestsChecked: 0,
+      linksChecked: 0,
+      completed: 0,
+      failed: 1,
+    };
   });
 
   async function syncFailureResponse(error: string, detail?: unknown) {

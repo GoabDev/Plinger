@@ -18,6 +18,11 @@ describe("assigned issue search", () => {
     expect(url.searchParams.get("page")).toBe("2");
   });
 
+  it("accepts GitHub logins containing numbers", () => {
+    expect(buildAssignedIssueSearchUrl("thisismizz2", 1).searchParams.get("q"))
+      .toBe("is:issue assignee:thisismizz2");
+  });
+
   it("hydrates repository details and reuses them across pages", async () => {
     const repositoryUrl = "https://api.github.com/repos/DigiNodes/truthbounty-frontend";
     const repository: GitHubRepository = {

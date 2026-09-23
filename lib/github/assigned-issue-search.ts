@@ -15,6 +15,7 @@ export type GitHubRepository = {
 };
 export type GitHubAssignedIssue = {
   id?: number;
+  node_id?: string;
   number?: number;
   title?: string;
   state?: string;
@@ -37,7 +38,7 @@ type GitHubIssueSearchResponse = {
 type FetchLike = typeof fetch;
 
 export function buildAssignedIssueSearchUrl(login: string, page: number) {
-  if (!/^[a-zd](?:[a-z\d-]{0,37}[a-z\d])?$/i.test(login)) {
+  if (!/^[a-z\d](?:[a-z\d-]{0,37}[a-z\d])?$/i.test(login)) {
     throw new Error("GitHub account login is invalid");
   }
   if (!Number.isSafeInteger(page) || page < 1) {

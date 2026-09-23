@@ -63,14 +63,14 @@ describe("shared validation contracts", () => {
       failed: 0,
       skipped: 0,
       mode: "poll",
-      assignmentSync: { scoutersChecked: 1, pagesChecked: 2, issuesChecked: 137, completed: 0, failed: 0 },
+      assignmentSync: { scoutersChecked: 1, pagesChecked: 2, issuesChecked: 137, pullRequestsChecked: 12, linksChecked: 8, completed: 0, failed: 0 },
     }).success).toBe(true);
     expect(githubSyncResultSchema.safeParse({
       checked: 2,
       failed: 0,
       skipped: 0,
       mode: "poll",
-      assignmentSync: { scoutersChecked: 1, pagesChecked: -1, issuesChecked: 0, completed: 0, failed: 0 },
+      assignmentSync: { scoutersChecked: 1, pagesChecked: -1, issuesChecked: 0, pullRequestsChecked: 0, linksChecked: 0, completed: 0, failed: 0 },
     }).success).toBe(false);
     expect(githubSyncResultSchema.safeParse({ checked: -1, failed: 0, skipped: 0, mode: "full" }).success).toBe(false);
   });

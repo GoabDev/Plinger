@@ -8,6 +8,15 @@ import {
   type GitHubAssignedIssue,
   type GitHubRepository,
 } from "./assigned-issue-search";
+import {
+  fetchAssignedIssueRelationships,
+  fetchAuthoredPullRequestsPage,
+  type GitHubScouterPullRequest,
+  type GitHubWorkLink,
+} from "./scouter-work-search";
+
+type WorkPhase = "issues" | "pull_requests";
+type PhaseStatus = "pending" | "syncing" | "complete" | "failed";
 
 type ScouterTokenRow = {
   account_id: number;
@@ -19,9 +28,15 @@ type SyncStateRow = {
   account_id: number;
   status: "pending" | "syncing" | "complete" | "stale" | "token_required" | "failed";
   sync_run_id: string | null;
+  phase: WorkPhase;
   next_page: number;
   pages_checked: number;
   issues_seen: number;
+  issue_status: PhaseStatus;
+  pull_request_status: PhaseStatus;
+  pull_request_pages_checked: number;
+  pull_requests_seen: number;
+  links_seen: number;
   last_completed_at: string | null;
   updated_at: string;
 };
@@ -30,6 +45,8 @@ export type AssignmentSyncResult = {
   scoutersChecked: number;
   pagesChecked: number;
   issuesChecked: number;
+  pullRequestsChecked: number;
+  linksChecked: number;
   completed: number;
   failed: number;
 };
@@ -149,7 +166,7 @@ export async function syncScouterAssignmentsBatch({
       .not("pat_ciphertext", "is", null)
       .limit(1000),
     client.from("scouter_issue_sync_state")
-      .select("account_id,status,sync_run_id,next_page,pages_checked,issues_seen,last_completed_at,updated_at")
+      .select("account_id,status,sync_run_id,phase,next_page,pages_checked,issues_seen,issue_status,pull_request_status,pull_request_pages_checked,pull_requests_seen,links_seen,last_completed_at,updated_at")
       .limit(1000),
   ]);
   if (profilesError) throw profilesError;
@@ -168,6 +185,8 @@ export async function syncScouterAssignmentsBatch({
     scoutersChecked: 0,
     pagesChecked: 0,
     issuesChecked: 0,
+    pullRequestsChecked: 0,
+    linksChecked: 0,
     completed: 0,
     failed: 0,
   };
@@ -175,7 +194,7 @@ export async function syncScouterAssignmentsBatch({
   for (let index = 0; index < selectedCandidates.length; index += batchSize) {
     const outcomes = await Promise.all(selectedCandidates.slice(index, index + batchSize).map(async (profile) => {
       try {
-        const outcome = await syncScouterAssignments(
+        const outcome = await syncScouterWork(
           profile,
           stateByAccount.get(Number(profile.account_id)) ?? null,
           maxPagesPerScouter,
@@ -183,16 +202,28 @@ export async function syncScouterAssignmentsBatch({
         return { ...outcome, failed: false };
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
+        const phase = error instanceof ScouterWorkSyncError ? error.phase : "issues";
         console.error("[github:assignment-sync:failed]", { accountId: profile.account_id, error });
         await client.from("scouter_issue_sync_state").upsert({
           account_id: profile.account_id,
           account_login: profile.account_login,
           status: "failed",
           coverage: "all_visible_repositories",
+          phase,
+          ...(phase === "issues"
+            ? { issue_status: "failed", issue_last_error: message.slice(0, 500) }
+            : { pull_request_status: "failed", pull_request_last_error: message.slice(0, 500) }),
           last_error: message.slice(0, 500),
           updated_at: new Date().toISOString(),
         }, { onConflict: "account_id" });
-        return { pagesChecked: 0, issuesChecked: 0, complete: false, failed: true };
+        return {
+          pagesChecked: 0,
+          issuesChecked: 0,
+          pullRequestsChecked: 0,
+          linksChecked: 0,
+          complete: false,
+          failed: true,
+        };
       }
     }));
 
@@ -200,6 +231,8 @@ export async function syncScouterAssignmentsBatch({
       result.scoutersChecked++;
       result.pagesChecked += outcome.pagesChecked;
       result.issuesChecked += outcome.issuesChecked;
+      result.pullRequestsChecked += outcome.pullRequestsChecked;
+      result.linksChecked += outcome.linksChecked;
       if (outcome.complete) result.completed++;
       if (outcome.failed) result.failed++;
     }
@@ -208,7 +241,7 @@ export async function syncScouterAssignmentsBatch({
   return result;
 }
 
-async function syncScouterAssignments(
+async function syncScouterWork(
   profile: ScouterTokenRow,
   existing: SyncStateRow | null,
   maxPages: number,
@@ -216,9 +249,13 @@ async function syncScouterAssignments(
   const client = serviceClient();
   const resumed = existing?.status === "syncing" && existing.sync_run_id;
   const runId = resumed ? existing.sync_run_id! : randomUUID();
+  let phase: WorkPhase = resumed ? existing.phase : "issues";
   let page = resumed ? existing.next_page : 1;
-  let totalPages = resumed ? existing.pages_checked : 0;
+  let totalIssuePages = resumed ? existing.pages_checked : 0;
   let totalIssues = resumed ? existing.issues_seen : 0;
+  let totalPullRequestPages = resumed ? existing.pull_request_pages_checked : 0;
+  let totalPullRequests = resumed ? existing.pull_requests_seen : 0;
+  let totalLinks = resumed ? existing.links_seen : 0;
   const startedAt = new Date().toISOString();
 
   const { error: startError } = await client.from("scouter_issue_sync_state").upsert({
@@ -227,72 +264,169 @@ async function syncScouterAssignments(
     status: "syncing",
     coverage: "all_visible_repositories",
     sync_run_id: runId,
+    phase,
     next_page: page,
-    pages_checked: totalPages,
+    pages_checked: totalIssuePages,
     issues_seen: totalIssues,
+    issue_status: phase === "issues" ? "syncing" : "complete",
+    pull_request_status: phase === "pull_requests" ? "syncing" : "pending",
+    pull_request_pages_checked: totalPullRequestPages,
+    pull_requests_seen: totalPullRequests,
+    links_seen: totalLinks,
     started_at: resumed ? undefined : startedAt,
     last_error: null,
+    issue_last_error: null,
+    pull_request_last_error: null,
     updated_at: startedAt,
   }, { onConflict: "account_id" });
   if (startError) throw startError;
 
-  const pat = decryptPat(profile.pat_ciphertext);
-  const tokenOwner = await getGitHubTokenOwner(pat);
-  if (tokenOwner.id !== Number(profile.account_id)) {
-    throw new Error(`GitHub token belongs to @${tokenOwner.login}, not @${profile.account_login}`);
+  let pat: string;
+  let tokenOwner: Awaited<ReturnType<typeof getGitHubTokenOwner>>;
+  try {
+    pat = decryptPat(profile.pat_ciphertext);
+    tokenOwner = await getGitHubTokenOwner(pat);
+    if (tokenOwner.id !== Number(profile.account_id)) {
+      throw new Error(`GitHub token belongs to @${tokenOwner.login}, not @${profile.account_login}`);
+    }
+  } catch (error) {
+    throw new ScouterWorkSyncError(phase, error);
   }
   const repositoryCache = new Map<string, GitHubRepository>();
   let pagesChecked = 0;
   let issuesChecked = 0;
+  let pullRequestsChecked = 0;
+  let linksChecked = 0;
   while (pagesChecked < maxPages) {
-    const response = await fetchAssignedIssuesPage({
-      token: pat,
-      login: tokenOwner.login,
-      page,
-      repositoryCache,
-    });
-    const issues = response.issues;
-    await storeAssignedIssuePage(profile, runId, issues);
-    pagesChecked++;
-    issuesChecked += issues.length;
-    totalPages++;
-    totalIssues += issues.length;
+    try {
+      if (phase === "issues") {
+        const response = await fetchAssignedIssuesPage({
+          token: pat,
+          login: tokenOwner.login,
+          page,
+          repositoryCache,
+        });
+        const relationships = await fetchAssignedIssueRelationships({ token: pat, issues: response.issues });
+        await storeAssignedIssuePage(profile, runId, response.issues);
+        await storePullRequestsAndLinks({
+          pullRequests: relationships.pullRequests,
+          links: relationships.links,
+          replaceIssueIds: response.issues.flatMap((issue) => issue.id ? [issue.id] : []),
+        });
+        pagesChecked++;
+        issuesChecked += response.issues.length;
+        pullRequestsChecked += relationships.pullRequests.length;
+        linksChecked += relationships.links.length;
+        totalIssuePages++;
+        totalIssues += response.issues.length;
+        totalLinks += relationships.links.length;
 
-    if (!response.hasNextPage) {
-      await completeSync(profile, runId, totalPages, totalIssues);
-      return { pagesChecked, issuesChecked, complete: true };
+        if (!response.hasNextPage) {
+          await completeIssuePhase(profile, runId, {
+            issuesSeen: totalIssues,
+            issuePagesChecked: totalIssuePages,
+            pullRequestsSeen: totalPullRequests,
+            linksSeen: totalLinks,
+          });
+          phase = "pull_requests";
+          page = 1;
+          continue;
+        }
+
+        page++;
+        await updateProgress(profile, runId, {
+          phase,
+          nextPage: page,
+          issuePagesChecked: totalIssuePages,
+          issuesSeen: totalIssues,
+          pullRequestPagesChecked: totalPullRequestPages,
+          pullRequestsSeen: totalPullRequests,
+          linksSeen: totalLinks,
+        });
+        continue;
+      }
+
+      const response = await fetchAuthoredPullRequestsPage({
+        token: pat,
+        login: tokenOwner.login,
+        page,
+      });
+      await storeDiscoveredIssues(response.issues);
+      await storePullRequestsAndLinks({
+        pullRequests: response.pullRequests,
+        links: response.links,
+        replacePullRequestIds: response.pullRequests.map((pullRequest) => pullRequest.id),
+      });
+      pagesChecked++;
+      issuesChecked += response.issues.length;
+      pullRequestsChecked += response.pullRequests.length;
+      linksChecked += response.links.length;
+      totalPullRequestPages++;
+      totalPullRequests += response.pullRequests.length;
+      totalLinks += response.links.length;
+
+      if (!response.hasNextPage) {
+        await completeWorkSync(profile, runId, {
+          issuesSeen: totalIssues,
+          issuePagesChecked: totalIssuePages,
+          pullRequestPagesChecked: totalPullRequestPages,
+          pullRequestsSeen: totalPullRequests,
+          linksSeen: totalLinks,
+        });
+        return { pagesChecked, issuesChecked, pullRequestsChecked, linksChecked, complete: true };
+      }
+
+      page++;
+      await updateProgress(profile, runId, {
+        phase,
+        nextPage: page,
+        issuePagesChecked: totalIssuePages,
+        issuesSeen: totalIssues,
+        pullRequestPagesChecked: totalPullRequestPages,
+        pullRequestsSeen: totalPullRequests,
+        linksSeen: totalLinks,
+      });
+    } catch (error) {
+      throw new ScouterWorkSyncError(phase, error);
     }
-
-    page++;
-    const { error } = await client.from("scouter_issue_sync_state").update({
-      next_page: page,
-      pages_checked: totalPages,
-      issues_seen: totalIssues,
-      updated_at: new Date().toISOString(),
-    }).eq("account_id", profile.account_id).eq("sync_run_id", runId);
-    if (error) throw error;
   }
 
-  return { pagesChecked, issuesChecked, complete: false };
+  return { pagesChecked, issuesChecked, pullRequestsChecked, linksChecked, complete: false };
 }
 
 async function storeAssignedIssuePage(profile: ScouterTokenRow, runId: string, issues: GitHubAssignedIssue[]) {
   if (!issues.length) return;
   const client = serviceClient();
-  const repositories = uniqueRepositories(issues);
-  if (repositories.length) {
-    const { error } = await client.from("repositories").upsert(repositories, { onConflict: "github_repository_id" });
-    if (error) throw error;
-  }
+  const storedIssues = await upsertIssues(issues);
 
-  const repositoryNames = repositories.map((repository) => repository.full_name);
-  const { data: storedRepositories, error: repositoryError } = repositoryNames.length
-    ? await client.from("repositories").select("id,full_name").in("full_name", repositoryNames)
-    : { data: [], error: null };
-  if (repositoryError) throw repositoryError;
-  const repositoryByName = new Map((storedRepositories ?? []).map((repository) => [repository.full_name, repository.id]));
+  const now = new Date().toISOString();
+  const assignments = storedIssues.map((issue) => ({
+    issue_id: issue.id,
+    assignee_account_id: profile.account_id,
+    assignee_login: profile.account_login,
+    active: true,
+    unassigned_at: null,
+    last_seen_at: now,
+    last_seen_sync_id: runId,
+    missed_complete_syncs: 0,
+    source: "scouter_token",
+    updated_at: now,
+  }));
+  if (!assignments.length) return;
+  const { error: assignmentError } = await client.from("issue_assignments")
+    .upsert(assignments, { onConflict: "issue_id,assignee_account_id" });
+  if (assignmentError) throw assignmentError;
+}
 
-  const issueRows = issues.flatMap((issue) => {
+async function storeDiscoveredIssues(issues: GitHubAssignedIssue[]) {
+  if (issues.length) await upsertIssues(issues);
+}
+
+async function upsertIssues(issues: GitHubAssignedIssue[]) {
+  if (!issues.length) return [] as Array<{ id: string; github_issue_id: number }>;
+  const client = serviceClient();
+  const repositoryByName = await upsertRepositories(issues, []);
+  const rows = issues.flatMap((issue) => {
     const repository = issue.repository;
     if (!issue.id || !issue.number || !issue.title || !issue.state || !repository?.full_name) return [];
     return [{
@@ -309,31 +443,101 @@ async function storeAssignedIssuePage(profile: ScouterTokenRow, runId: string, i
       updated_at: issue.updated_at ?? new Date().toISOString(),
     }];
   });
-  if (!issueRows.length) return;
-  const { data: storedIssues, error: issueError } = await client.from("issues")
-    .upsert(issueRows, { onConflict: "github_issue_id" })
+  if (!rows.length) return [] as Array<{ id: string; github_issue_id: number }>;
+  const { data, error } = await client.from("issues")
+    .upsert(rows, { onConflict: "github_issue_id" })
     .select("id,github_issue_id");
-  if (issueError) throw issueError;
-
-  const now = new Date().toISOString();
-  const assignments = (storedIssues ?? []).map((issue) => ({
-    issue_id: issue.id,
-    assignee_account_id: profile.account_id,
-    assignee_login: profile.account_login,
-    active: true,
-    unassigned_at: null,
-    last_seen_at: now,
-    last_seen_sync_id: runId,
-    missed_complete_syncs: 0,
-    source: "scouter_token",
-    updated_at: now,
-  }));
-  const { error: assignmentError } = await client.from("issue_assignments")
-    .upsert(assignments, { onConflict: "issue_id,assignee_account_id" });
-  if (assignmentError) throw assignmentError;
+  if (error) throw error;
+  return (data ?? []) as Array<{ id: string; github_issue_id: number }>;
 }
 
-async function completeSync(profile: ScouterTokenRow, runId: string, pagesChecked: number, issuesSeen: number) {
+async function storePullRequestsAndLinks({
+  pullRequests,
+  links,
+  replaceIssueIds = [],
+  replacePullRequestIds = [],
+}: {
+  pullRequests: GitHubScouterPullRequest[];
+  links: GitHubWorkLink[];
+  replaceIssueIds?: number[];
+  replacePullRequestIds?: number[];
+}) {
+  const client = serviceClient();
+  if (pullRequests.length) {
+    const repositoryByName = await upsertRepositories([], pullRequests);
+    const rows = pullRequests.map((pullRequest) => ({
+      repository_id: repositoryByName.get(pullRequest.repository.full_name!) ?? null,
+      github_pull_request_id: pullRequest.id,
+      github_pull_request_number: pullRequest.number,
+      title: pullRequest.title,
+      state: pullRequest.state,
+      url: pullRequest.html_url,
+      author_login: pullRequest.user?.login ?? null,
+      head_ref: pullRequest.head_ref,
+      base_ref: pullRequest.base_ref,
+      merged: pullRequest.merged,
+      merged_at: pullRequest.merged_at,
+      mergeable: pullRequest.mergeable,
+      mergeable_state: pullRequest.mergeable_state,
+      opened_at: pullRequest.created_at,
+      closed_at: pullRequest.closed_at,
+      updated_at: pullRequest.updated_at,
+    }));
+    const { error } = await client.from("pull_requests").upsert(rows, { onConflict: "github_pull_request_id" });
+    if (error) throw error;
+  }
+
+  for (const githubIssueId of [...new Set(replaceIssueIds)]) {
+    const { error } = await client.from("issue_pull_requests").delete().eq("github_issue_id", githubIssueId);
+    if (error) throw error;
+  }
+  for (const githubPullRequestId of [...new Set(replacePullRequestIds)]) {
+    const { error } = await client.from("issue_pull_requests").delete().eq("github_pull_request_id", githubPullRequestId);
+    if (error) throw error;
+  }
+  const rows = [...new Map(links.map((link) => [
+    `${link.githubIssueId}:${link.githubPullRequestId}`,
+    {
+      github_issue_id: link.githubIssueId,
+      github_pull_request_id: link.githubPullRequestId,
+      updated_at: new Date().toISOString(),
+    },
+  ])).values()];
+  if (rows.length) {
+    const { error } = await client.from("issue_pull_requests")
+      .upsert(rows, { onConflict: "github_issue_id,github_pull_request_id" });
+    if (error) throw error;
+  }
+}
+
+async function upsertRepositories(
+  issues: GitHubAssignedIssue[],
+  pullRequests: GitHubScouterPullRequest[],
+) {
+  const client = serviceClient();
+  const repositories = uniqueRepositories(issues, pullRequests);
+  if (repositories.length) {
+    const { error } = await client.from("repositories").upsert(repositories, { onConflict: "github_repository_id" });
+    if (error) throw error;
+  }
+  const names = repositories.map((repository) => repository.full_name);
+  const { data, error } = names.length
+    ? await client.from("repositories").select("id,full_name").in("full_name", names)
+    : { data: [], error: null };
+  if (error) throw error;
+  return new Map((data ?? []).map((repository) => [repository.full_name, repository.id]));
+}
+
+async function completeIssuePhase(
+  profile: ScouterTokenRow,
+  runId: string,
+  totals: {
+    issuesSeen: number;
+    issuePagesChecked: number;
+    pullRequestsSeen: number;
+    linksSeen: number;
+  },
+) {
   const client = serviceClient();
   const completedAt = new Date().toISOString();
   const { error: closeError } = await client.from("issue_assignments").update({
@@ -357,23 +561,88 @@ async function completeSync(profile: ScouterTokenRow, runId: string, pagesChecke
   if (missError) throw missError;
 
   const { error: stateError } = await client.from("scouter_issue_sync_state").update({
-    status: "complete",
-    coverage: "all_visible_repositories",
-    sync_run_id: null,
+    phase: "pull_requests",
     next_page: 1,
-    pages_checked: pagesChecked,
-    issues_seen: issuesSeen,
-    last_completed_at: completedAt,
+    pages_checked: totals.issuePagesChecked,
+    issues_seen: totals.issuesSeen,
+    pull_requests_seen: totals.pullRequestsSeen,
+    links_seen: totals.linksSeen,
+    issue_status: "complete",
+    pull_request_status: "syncing",
+    issue_last_error: null,
     last_error: null,
     updated_at: completedAt,
   }).eq("account_id", profile.account_id).eq("sync_run_id", runId);
   if (stateError) throw stateError;
 }
 
-function uniqueRepositories(issues: GitHubAssignedIssue[]) {
+async function updateProgress(
+  profile: ScouterTokenRow,
+  runId: string,
+  progress: {
+    phase: WorkPhase;
+    nextPage: number;
+    issuePagesChecked: number;
+    issuesSeen: number;
+    pullRequestPagesChecked: number;
+    pullRequestsSeen: number;
+    linksSeen: number;
+  },
+) {
+  const { error } = await serviceClient().from("scouter_issue_sync_state").update({
+    phase: progress.phase,
+    next_page: progress.nextPage,
+    pages_checked: progress.issuePagesChecked,
+    issues_seen: progress.issuesSeen,
+    pull_request_pages_checked: progress.pullRequestPagesChecked,
+    pull_requests_seen: progress.pullRequestsSeen,
+    links_seen: progress.linksSeen,
+    updated_at: new Date().toISOString(),
+  }).eq("account_id", profile.account_id).eq("sync_run_id", runId);
+  if (error) throw error;
+}
+
+async function completeWorkSync(
+  profile: ScouterTokenRow,
+  runId: string,
+  totals: {
+    issuesSeen: number;
+    issuePagesChecked: number;
+    pullRequestPagesChecked: number;
+    pullRequestsSeen: number;
+    linksSeen: number;
+  },
+) {
+  const completedAt = new Date().toISOString();
+  const { error } = await serviceClient().from("scouter_issue_sync_state").update({
+    status: "complete",
+    coverage: "all_visible_repositories",
+    sync_run_id: null,
+    phase: "issues",
+    next_page: 1,
+    pages_checked: totals.issuePagesChecked,
+    issues_seen: totals.issuesSeen,
+    issue_status: "complete",
+    pull_request_status: "complete",
+    pull_request_pages_checked: totals.pullRequestPagesChecked,
+    pull_requests_seen: totals.pullRequestsSeen,
+    links_seen: totals.linksSeen,
+    last_completed_at: completedAt,
+    last_error: null,
+    issue_last_error: null,
+    pull_request_last_error: null,
+    updated_at: completedAt,
+  }).eq("account_id", profile.account_id).eq("sync_run_id", runId);
+  if (error) throw error;
+}
+
+function uniqueRepositories(
+  issues: GitHubAssignedIssue[],
+  pullRequests: GitHubScouterPullRequest[],
+) {
   const byId = new Map<number, Record<string, unknown>>();
-  for (const issue of issues) {
-    const repository = issue.repository;
+  for (const workItem of [...issues, ...pullRequests]) {
+    const repository = workItem.repository;
     if (!repository?.id || !repository.name || !repository.full_name) continue;
     byId.set(repository.id, {
       github_repository_id: repository.id,
@@ -387,6 +656,13 @@ function uniqueRepositories(issues: GitHubAssignedIssue[]) {
     });
   }
   return [...byId.values()] as Array<Record<string, unknown> & { full_name: string }>;
+}
+
+class ScouterWorkSyncError extends Error {
+  constructor(public readonly phase: WorkPhase, cause: unknown) {
+    super(cause instanceof Error ? cause.message : String(cause), { cause });
+    this.name = "ScouterWorkSyncError";
+  }
 }
 
 function compareCandidates(

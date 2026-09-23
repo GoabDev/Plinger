@@ -65,10 +65,18 @@ export async function PATCH(request: Request) {
         status: "pending",
         coverage: "all_visible_repositories",
         sync_run_id: null,
+        phase: "issues",
         next_page: 1,
         pages_checked: 0,
         issues_seen: 0,
+        issue_status: "pending",
+        pull_request_status: "pending",
+        pull_request_pages_checked: 0,
+        pull_requests_seen: 0,
+        links_seen: 0,
         last_error: null,
+        issue_last_error: null,
+        pull_request_last_error: null,
         updated_at: new Date().toISOString(),
       }, { onConflict: "account_id" });
       if (syncStateError) throw syncStateError;

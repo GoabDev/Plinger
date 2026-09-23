@@ -219,17 +219,18 @@ Keep this key stable: changing it makes already uploaded PATs unreadable.
 The proof bucket is private and files are served only through authenticated
 routes. Uploaded proofs are reviewed as pending, confirmed, or rejected.
 Apply `supabase/migrations/20260923095929_complete_scouter_issue_assignments.sql`
-before deploying complete assigned-issue synchronization. Assigned issues are
-normalized by stable GitHub account ID and the Scouters views show whether
-coverage is complete, syncing, queued, failed, or limited to connected
-repositories. A scouter who has uploaded a PAT is synchronized through
-GitHub's authenticated-user issues feed across every repository that token can
-access. Sync pages are checkpointed and resumed by the existing scheduled
-workflow; an issue must be absent from two successful complete syncs before it
-is marked unassigned, preventing interrupted or shifting pages from removing
-work prematurely. GitHub issue webhooks and app reconciliation update known
-scouter assignments immediately. Assignment timestamps from before Plinger
-started tracking remain unknown unless a later timeline backfill supplies them.
+and `supabase/migrations/20260923211806_extend_scouter_work_sync.sql` before
+deploying complete Scouter work synchronization. For every Scouter with an
+uploaded PAT, the scheduled and on-demand sync searches all repositories that
+token can see for assigned issues and authored pull requests, then records
+GitHub's issue-to-PR closing relationships in both directions. Issue and PR
+phases are checkpointed independently, and the Scouters views report their
+counts and failure states. An issue must be absent from two successful complete
+syncs before it is marked unassigned, preventing interrupted or shifting pages
+from removing work prematurely. GitHub App webhooks continue to update known
+records immediately where the App is installed. Comments, reviews, and full
+commit histories are not imported by this sync because the current views do
+not display them.
 
 ## Verified Earnings
 
