@@ -8,6 +8,7 @@ import { githubSyncRequestSchema } from "../../../../lib/github/contracts";
 import { syncScouterAssignmentsBatch } from "../../../../lib/github/assignment-sync";
 
 export const runtime = "nodejs";
+export const maxDuration = 300;
 
 type WorkRow = { url: string | null; github_pull_request_number: number };
 type LinkRow = { github_pull_request_id: number };
@@ -51,8 +52,9 @@ export async function POST(request: Request) {
   }
 
   const assignmentSyncPromise = syncScouterAssignmentsBatch({
-    maxScouters: mode === "full" ? 5 : 3,
+    maxScouters: mode === "full" ? null : 3,
     maxPagesPerScouter: mode === "full" ? 10 : 2,
+    concurrency: 3,
   }).catch((error) => {
     console.error("[github:assignment-sync:batch-failed]", error);
     return { scoutersChecked: 0, pagesChecked: 0, issuesChecked: 0, completed: 0, failed: 1 };

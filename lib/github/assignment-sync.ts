@@ -136,9 +136,11 @@ export async function recordKnownScouterAssignmentEvent({
 export async function syncScouterAssignmentsBatch({
   maxScouters = 1,
   maxPagesPerScouter = 5,
+  concurrency = 1,
 }: {
-  maxScouters?: number;
+  maxScouters?: number | null;
   maxPagesPerScouter?: number;
+  concurrency?: number;
 } = {}): Promise<AssignmentSyncResult> {
   const client = serviceClient();
   const [{ data: profiles, error: profilesError }, { data: states, error: statesError }] = await Promise.all([
@@ -156,8 +158,11 @@ export async function syncScouterAssignmentsBatch({
   const stateByAccount = new Map((states as SyncStateRow[] | null)?.map((state) => [Number(state.account_id), state]));
   const candidates = (profiles as ScouterTokenRow[] | null ?? [])
     .filter((profile) => profile.pat_ciphertext)
-    .sort((left, right) => compareCandidates(left, right, stateByAccount))
-    .slice(0, maxScouters);
+    .sort((left, right) => compareCandidates(left, right, stateByAccount));
+  const selectedCandidates = maxScouters === null
+    ? candidates
+    : candidates.slice(0, maxScouters);
+  const batchSize = Math.max(1, Math.min(5, Math.floor(concurrency)));
 
   const result: AssignmentSyncResult = {
     scoutersChecked: 0,
@@ -167,25 +172,36 @@ export async function syncScouterAssignmentsBatch({
     failed: 0,
   };
 
-  for (const profile of candidates) {
-    result.scoutersChecked++;
-    try {
-      const outcome = await syncScouterAssignments(profile, stateByAccount.get(Number(profile.account_id)) ?? null, maxPagesPerScouter);
+  for (let index = 0; index < selectedCandidates.length; index += batchSize) {
+    const outcomes = await Promise.all(selectedCandidates.slice(index, index + batchSize).map(async (profile) => {
+      try {
+        const outcome = await syncScouterAssignments(
+          profile,
+          stateByAccount.get(Number(profile.account_id)) ?? null,
+          maxPagesPerScouter,
+        );
+        return { ...outcome, failed: false };
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        console.error("[github:assignment-sync:failed]", { accountId: profile.account_id, error });
+        await client.from("scouter_issue_sync_state").upsert({
+          account_id: profile.account_id,
+          account_login: profile.account_login,
+          status: "failed",
+          coverage: "all_visible_repositories",
+          last_error: message.slice(0, 500),
+          updated_at: new Date().toISOString(),
+        }, { onConflict: "account_id" });
+        return { pagesChecked: 0, issuesChecked: 0, complete: false, failed: true };
+      }
+    }));
+
+    for (const outcome of outcomes) {
+      result.scoutersChecked++;
       result.pagesChecked += outcome.pagesChecked;
       result.issuesChecked += outcome.issuesChecked;
       if (outcome.complete) result.completed++;
-    } catch (error) {
-      result.failed++;
-      const message = error instanceof Error ? error.message : String(error);
-      console.error("[github:assignment-sync:failed]", { accountId: profile.account_id, error });
-      await client.from("scouter_issue_sync_state").upsert({
-        account_id: profile.account_id,
-        account_login: profile.account_login,
-        status: "failed",
-        coverage: "all_visible_repositories",
-        last_error: message.slice(0, 500),
-        updated_at: new Date().toISOString(),
-      }, { onConflict: "account_id" });
+      if (outcome.failed) result.failed++;
     }
   }
 
