@@ -12,7 +12,7 @@ on:
         options:
           - poll
           - full
-        default: poll
+        default: full
 
 permissions: {}
 
@@ -23,7 +23,7 @@ concurrency:
 jobs:
   sync:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 6
     steps:
       - name: Refresh GitHub records
         env:
@@ -41,7 +41,7 @@ jobs:
           case "$mode" in poll|full) ;; *) echo "Invalid sync mode"; exit 1 ;; esac
 
           curl --fail-with-body --silent --show-error \
-            --connect-timeout 10 --max-time 210 \
+            --connect-timeout 10 --max-time 290 \
             --request POST "https://plinger.vercel.app/api/github/sync" \
             --header "Authorization: Bearer ${PLINGER_SYNC_SECRET}" \
             --header "Content-Type: application/json" \
