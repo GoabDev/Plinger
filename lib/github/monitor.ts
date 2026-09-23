@@ -1,5 +1,6 @@
 import { deleteSupabaseRows, selectSupabaseRows, upsertSupabaseRow } from "../supabase/server";
 import { githubGraphQL } from "./api";
+import { reconcileKnownScouterAssignments } from "./assignment-sync";
 
 type Payload = Record<string, unknown>;
 type Node = Record<string, unknown>;
@@ -15,7 +16,7 @@ const prFields = `
 const prWithIssuesFields = `${prFields}
   closedIssues: closingIssuesReferences(first: 100) {
     nodes { fullDatabaseId number title url state createdAt closedAt updatedAt
-      assignees(first: 20) { nodes { login } }
+      assignees(first: 20) { nodes { databaseId login } }
       labels(first: 20) { nodes { name } }
       repository { nameWithOwner }
     }
@@ -27,7 +28,7 @@ const issueQuery = `query($owner: String!, $name: String!, $number: Int!) {
   repository(owner: $owner, name: $name) {
     issue(number: $number) {
       fullDatabaseId number title url state createdAt closedAt updatedAt
-      assignees(first: 20) { nodes { login } }
+      assignees(first: 20) { nodes { databaseId login } }
       labels(first: 20) { nodes { name } }
       linkedPrs: closedByPullRequestsReferences(first: 100, includeClosedPrs: true) {
         nodes { ${prFields} }
@@ -42,7 +43,7 @@ const repositoryIssuesQuery = `query($owner: String!, $name: String!) {
     issues(first: 12, states: [OPEN, CLOSED], orderBy: {field: UPDATED_AT, direction: DESC}) {
       nodes {
         fullDatabaseId number title url state createdAt closedAt updatedAt
-        assignees(first: 20) { nodes { login } }
+        assignees(first: 20) { nodes { databaseId login } }
         labels(first: 20) { nodes { name } }
         linkedPrs: closedByPullRequestsReferences(first: 20, includeClosedPrs: true) {
           nodes { ${prFields} }
@@ -260,6 +261,16 @@ async function storeIssue(issue: Node) {
     },
   });
   if (!result.ok) throw new Error(`Could not store linked issue: ${result.error}`);
+  await reconcileKnownScouterAssignments({
+    githubIssueId: Number(id),
+    assignees: (assignees?.nodes ?? []).flatMap((node) => {
+      const accountId = number(node.databaseId);
+      const login = string(node.login);
+      return accountId && login ? [{ accountId, login }] : [];
+    }),
+    observedAt: string(issue.updatedAt) ?? new Date().toISOString(),
+    source: "github_app",
+  });
 }
 
 function object(value: unknown): Node | null {

@@ -16,7 +16,7 @@ import {
   X,
 } from "lucide-react";
 import type { IssueRow, PullRequestRow, WebhookEventRow } from "../../lib/dashboard/data";
-import type { ScouterProfile, ScouterRow } from "../../lib/dashboard/scouters";
+import type { ScouterIssueSyncState, ScouterProfile, ScouterRow } from "../../lib/dashboard/scouters";
 import { prStatus } from "../../lib/dashboard/status";
 import { adminScouterQueryKey, getAdminScouter } from "../../lib/scouter/admin-client";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
@@ -224,6 +224,7 @@ export default function ScoutersView({
             <div key={`${selectedLogin}-${tab}`} id="scouter-tab-panel" className="scouter-tab-panel" role="tabpanel" tabIndex={0} aria-labelledby={`scouter-tab-${tab}`}>
               {tab === "issues" && <>
                 <div className="scouter-content-heading"><h3>Currently assigned issues</h3><FilterGroup label="Issue status" values={[["all", "All"], ["open", "Open"], ["closed", "Closed"]]} value={issueFilter} onChange={(value) => setIssueFilter(value as IssueFilter)} /></div>
+                <AssignmentCoverage sync={profile.assignmentSync} />
                 <IssueTable rows={issueRows} linkedPullRequests={profile.linkedPullRequests} />
                 <ResultLimit shown={issueRows.length} total={issueFilter === "all" ? profile.openIssues.count + profile.closedIssues.count : issueFilter === "open" ? profile.openIssues.count : profile.closedIssues.count} />
               </>}
@@ -248,6 +249,22 @@ export default function ScoutersView({
       </div>
     </section>
   );
+}
+
+function AssignmentCoverage({ sync }: { sync: ScouterIssueSyncState }) {
+  const complete = sync.status === "complete" && sync.coverage === "all_visible_repositories";
+  const detail = complete
+    ? `Complete across repositories visible to the scouter credential${sync.last_completed_at ? `; synced ${formatDate(sync.last_completed_at)}` : ""}.`
+    : sync.status === "syncing"
+      ? `Full assignment sync is in progress; ${sync.issues_seen} issues checked.`
+      : sync.status === "failed"
+        ? `The last full assignment sync failed${sync.last_error ? `: ${sync.last_error}` : "."}`
+        : sync.status === "stale"
+          ? `The last complete assignment sync is stale${sync.last_completed_at ? `; last completed ${formatDate(sync.last_completed_at)}` : ""}.`
+          : sync.status === "pending"
+            ? "Full assignment sync is queued. Current results may be incomplete."
+            : "Coverage is limited to issues already captured from connected repositories.";
+  return <p className={`assignment-coverage ${complete ? "complete" : "limited"}`} role="status">{detail}</p>;
 }
 
 function ScouterAvatar({ scouter, large = false }: { scouter: ScouterRow; large?: boolean }) {

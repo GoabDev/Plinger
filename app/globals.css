@@ -2201,6 +2201,9 @@ ul {
 .scouters-directory-heading span { display: block; margin-top: 4px; color: var(--muted); font-size: 12px; }
 .scouters-directory-heading svg { color: #8a8d98; }
 .scouters-history-warning { margin: 0 14px 12px; padding: 9px 10px; border: 1px solid #ebd8ae; border-radius: 4px; background: #fffaf0; color: #735518; font-size: 12px; line-height: 1.4; }
+.assignment-coverage { margin: 0 0 14px; padding: 9px 11px; border: 1px solid #dddfe5; border-radius: 5px; background: #f7f7f9; color: var(--muted); font-size: 12px; line-height: 1.45; }
+.assignment-coverage.complete { border-color: #bfe5d2; background: #f2fbf6; color: #176b45; }
+.assignment-coverage.limited { border-color: #ebd8ae; background: #fffaf0; color: #735518; }
 .scouters-search {
   display: flex;
   align-items: center;
