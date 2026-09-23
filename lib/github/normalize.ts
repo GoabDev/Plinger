@@ -1,5 +1,6 @@
 import { upsertSupabaseRow } from "../supabase/server";
 import { getInstallationId } from "./payload";
+import { reconcileKnownScouterAssignments, recordKnownScouterAssignmentEvent } from "./assignment-sync";
 
 type JsonObject = Record<string, unknown>;
 
@@ -175,6 +176,35 @@ async function upsertIssue(payload: JsonObject, result: NormalizeResult) {
     },
     result,
   );
+
+  try {
+    const observedAt = asString(issue.updated_at) ?? new Date().toISOString();
+    await reconcileKnownScouterAssignments({
+      githubIssueId: issueId,
+      assignees: getObjectArray(issue.assignees).flatMap((assignee) => {
+        const accountId = asNumber(assignee.id);
+        const login = asString(assignee.login);
+        return accountId && login ? [{ accountId, login }] : [];
+      }),
+      observedAt,
+      source: "webhook",
+    });
+    const action = asString(payload.action);
+    const changedAssignee = asObject(payload.assignee);
+    const changedAccountId = asNumber(changedAssignee?.id);
+    const changedLogin = asString(changedAssignee?.login);
+    if ((action === "assigned" || action === "unassigned") && changedAccountId && changedLogin) {
+      await recordKnownScouterAssignmentEvent({
+        githubIssueId: issueId,
+        assignee: { accountId: changedAccountId, login: changedLogin },
+        action,
+        occurredAt: observedAt,
+      });
+    }
+  } catch (error) {
+    result.ok = false;
+    result.errors.push({ table: "issue_assignments", error: error instanceof Error ? error.message : String(error) });
+  }
 }
 
 async function upsertPullRequest(payload: JsonObject, result: NormalizeResult) {

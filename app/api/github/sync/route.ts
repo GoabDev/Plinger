@@ -5,6 +5,7 @@ import { createAuthClient } from "../../../../lib/supabase/auth-client";
 import { isAdmin } from "../../../../lib/supabase/auth-config";
 import { createHash, timingSafeEqual } from "node:crypto";
 import { githubSyncRequestSchema } from "../../../../lib/github/contracts";
+import { syncScouterAssignmentsBatch } from "../../../../lib/github/assignment-sync";
 
 export const runtime = "nodejs";
 
@@ -48,6 +49,14 @@ export async function POST(request: Request) {
   if (!process.env.GITHUB_APP_ID || !(process.env.GITHUB_PRIVATE_KEY || process.env.GITHUB_PRIVATE_KEY_PATH)) {
     return NextResponse.json({ error: "GitHub App credentials are not configured" }, { status: 503 });
   }
+
+  const assignmentSyncPromise = syncScouterAssignmentsBatch({
+    maxScouters: mode === "full" ? 2 : 1,
+    maxPagesPerScouter: mode === "full" ? 10 : 2,
+  }).catch((error) => {
+    console.error("[github:assignment-sync:batch-failed]", error);
+    return { scoutersChecked: 0, pagesChecked: 0, issuesChecked: 0, completed: 0, failed: 1 };
+  });
 
   const repositories = mode === "full" ? await selectSupabaseRows<RepositoryRow>({
     table: "repositories",
@@ -167,9 +176,11 @@ export async function POST(request: Request) {
     }
   }
 
+  const assignmentSync = await assignmentSyncPromise;
+  const failed = failures.length;
   return NextResponse.json(
-    { checked, failed: failures.length, skipped: [...new Set(skipped)].length, mode },
-    { status: failures.length ? (authorization !== null ? 503 : 207) : 200 },
+    { checked, failed, skipped: [...new Set(skipped)].length, mode, assignmentSync },
+    { status: failed ? (authorization !== null ? 503 : 207) : 200 },
   );
 }
 

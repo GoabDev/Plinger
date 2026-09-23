@@ -12,6 +12,25 @@ export type GitHubAppInstallation = {
 };
 const installationTokens = new Map<number, Promise<InstallationToken>>();
 
+export class GitHubTokenValidationError extends Error {}
+
+export async function getGitHubTokenOwner(token: string) {
+  const response = await fetch("https://api.github.com/user", {
+    headers: {
+      authorization: `Bearer ${token}`,
+      accept: "application/vnd.github+json",
+      "x-github-api-version": "2022-11-28",
+      "user-agent": "Plinger",
+    },
+    cache: "no-store",
+    signal: AbortSignal.timeout(12_000),
+  });
+  if (!response.ok) throw new GitHubTokenValidationError(`GitHub token validation failed: ${response.status}`);
+  const user = await response.json() as { id?: number; login?: string };
+  if (!user.id || !user.login) throw new GitHubTokenValidationError("GitHub token owner response is incomplete");
+  return { id: user.id, login: user.login };
+}
+
 async function getPrivateKey() {
   if (process.env.GITHUB_PRIVATE_KEY) {
     return process.env.GITHUB_PRIVATE_KEY.replace(/\\n/g, "\n");

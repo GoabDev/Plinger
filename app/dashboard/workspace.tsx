@@ -139,10 +139,15 @@ export default function DashboardWorkspace({
     mutationKey: githubSyncMutationKey,
     mutationFn: syncGitHub,
     onSuccess: (result) => {
-      setSyncFailed(Boolean(result.failed));
+      const assignmentFailures = result.assignmentSync?.failed ?? 0;
+      setSyncFailed(Boolean(result.failed || assignmentFailures));
       setSyncMessage(
         result.failed
           ? `Checked ${result.checked} records; ${result.failed} could not be checked.`
+          : assignmentFailures
+            ? `GitHub activity was checked, but ${assignmentFailures} scouter assignment sync failed and will be retried.`
+            : result.assignmentSync?.issuesChecked
+              ? `Checked ${result.checked} GitHub records and ${result.assignmentSync.issuesChecked} assigned issues.`
           : result.skipped
             ? `Checked ${result.checked} records; ${result.skipped} unavailable repositories were disabled.`
             : `Checked ${result.checked} recent issues and linked pull requests.`,

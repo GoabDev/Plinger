@@ -17,6 +17,15 @@ export type ScouterRow = {
 
 export type ScouterList<T> = { data: T[]; count: number };
 
+export type ScouterIssueSyncState = {
+  status: "pending" | "syncing" | "complete" | "stale" | "token_required" | "failed";
+  coverage: "app_repositories_only" | "all_visible_repositories";
+  pages_checked: number;
+  issues_seen: number;
+  last_completed_at: string | null;
+  last_error: string | null;
+};
+
 export type ScouterProfile = {
   scouter: ScouterRow;
   repositories: ScouterList<RepositoryRow>;
@@ -27,6 +36,7 @@ export type ScouterProfile = {
   closedPullRequests: ScouterList<PullRequestRow>;
   activity: ScouterList<WebhookEventRow>;
   linkedPullRequests: Array<{ github_issue_id: number; pull_request: PullRequestRow }>;
+  assignmentSync: ScouterIssueSyncState;
 };
 
 const scouterSelect = "id,installation_id,account_id,account_login,suspended_at,uninstalled_at,created_at";
@@ -34,6 +44,42 @@ const issueSelect = "id,github_issue_id,github_issue_number,title,state,url,assi
 const pullRequestSelect = "id,github_pull_request_id,github_pull_request_number,title,state,url,author_login,head_ref,base_ref,merged,merged_at,mergeable,mergeable_state,updated_at";
 const repositorySelect = "id,github_repository_id,owner_login,name,full_name,private,default_branch,archived,disabled,updated_at";
 const eventSelect = "id,delivery_id,event,action,repository_full_name,sender_login,received_at";
+const syncStateSelect = "status,coverage,pages_checked,issues_seen,last_completed_at,last_error";
+
+function effectiveSyncState(state: ScouterIssueSyncState) {
+  if (state.status !== "complete" || !state.last_completed_at) return state;
+  const age = Date.now() - Date.parse(state.last_completed_at);
+  return Number.isFinite(age) && age > 36 * 60 * 60 * 1000 ? { ...state, status: "stale" as const } : state;
+}
+
+async function getScouterIssues(scouter: ScouterRow, state: "open" | "closed") {
+  if (scouter.account_id) {
+    const normalized = await selectSupabaseRows<IssueRow>({
+      table: "scouter_current_issues",
+      query: {
+        select: issueSelect,
+        assignee_account_id: `eq.${scouter.account_id}`,
+        state: `eq.${state}`,
+        order: state === "open" ? "updated_at.desc" : "closed_at.desc.nullslast",
+        limit: "1000",
+      },
+      count: "exact",
+    });
+    if (!normalized.error && !normalized.skipped && Number.isFinite(normalized.count)) return normalized;
+  }
+
+  return selectSupabaseRows<IssueRow>({
+    table: "issues",
+    query: {
+      select: issueSelect,
+      assignee_logins: `cs.{${scouter.account_login}}`,
+      state: `eq.${state}`,
+      order: state === "open" ? "updated_at.desc" : "closed_at.desc.nullslast",
+      limit: "1000",
+    },
+    count: "exact",
+  });
+}
 
 async function getAuthenticatedGitHubAccounts() {
   const url = process.env.SUPABASE_URL;
@@ -111,23 +157,14 @@ export async function getScouterProfile(login: string): Promise<ScouterProfile |
   const scouter = directory.data.find((row) => row.account_login.toLowerCase() === login.toLowerCase());
   if (!scouter) return null;
 
-  const assigned = `cs.{${scouter.account_login}}`;
-  const [repositories, openIssues, closedIssues, openPullRequests, mergedPullRequests, closedPullRequests, activity] = await Promise.all([
+  const [repositories, openIssues, closedIssues, openPullRequests, mergedPullRequests, closedPullRequests, activity, syncState] = await Promise.all([
     selectSupabaseRows<RepositoryRow>({
       table: "repositories",
       query: { select: repositorySelect, owner_login: `eq.${scouter.account_login}`, disabled: "eq.false", order: "updated_at.desc", limit: "20" },
       count: "exact",
     }),
-    selectSupabaseRows<IssueRow>({
-      table: "issues",
-      query: { select: issueSelect, assignee_logins: assigned, state: "eq.open", order: "updated_at.desc", limit: "20" },
-      count: "exact",
-    }),
-    selectSupabaseRows<IssueRow>({
-      table: "issues",
-      query: { select: issueSelect, assignee_logins: assigned, state: "eq.closed", order: "closed_at.desc.nullslast", limit: "20" },
-      count: "exact",
-    }),
+    getScouterIssues(scouter, "open"),
+    getScouterIssues(scouter, "closed"),
     selectSupabaseRows<PullRequestRow>({
       table: "pull_requests",
       query: { select: pullRequestSelect, author_login: `eq.${scouter.account_login}`, state: "eq.open", order: "updated_at.desc", limit: "20" },
@@ -148,6 +185,10 @@ export async function getScouterProfile(login: string): Promise<ScouterProfile |
       query: { select: eventSelect, sender_login: `eq.${scouter.account_login}`, order: "received_at.desc", limit: "30" },
       count: "exact",
     }),
+    scouter.account_id ? selectSupabaseRows<ScouterIssueSyncState>({
+      table: "scouter_issue_sync_state",
+      query: { select: syncStateSelect, account_id: `eq.${scouter.account_id}`, limit: "1" },
+    }) : Promise.resolve({ data: [] as ScouterIssueSyncState[], error: undefined, skipped: false }),
   ]);
   const results = { repositories, openIssues, closedIssues, openPullRequests, mergedPullRequests, closedPullRequests, activity };
   for (const result of Object.values(results)) {
@@ -194,5 +235,15 @@ export async function getScouterProfile(login: string): Promise<ScouterProfile |
       const pull_request = linkedById.get(link.github_pull_request_id);
       return pull_request ? [{ github_issue_id: link.github_issue_id, pull_request }] : [];
     }),
+    assignmentSync: !syncState.error && !syncState.skipped && syncState.data[0]
+      ? effectiveSyncState(syncState.data[0])
+      : {
+          status: "token_required",
+          coverage: "app_repositories_only",
+          pages_checked: 0,
+          issues_seen: openIssues.count! + closedIssues.count!,
+          last_completed_at: null,
+          last_error: null,
+        },
   };
 }

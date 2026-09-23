@@ -49,7 +49,7 @@ export default function ScouterPortal() {
       if (input.kind === "pat") {
         patForm.reset();
         setEditingPat(false);
-        setMessage("PAT saved. Authorized admins can reveal it for assigned issue work.");
+        setMessage("PAT saved. A complete assigned-issue sync is now queued.");
       } else {
         setEditingBank(false);
         setMessage("Bank details saved.");
@@ -146,6 +146,7 @@ export default function ScouterPortal() {
 
     {view === "work" && <>
     <div className="scouter-work-toolbar"><div className="scouter-work-search"><Search size={16} aria-hidden="true" /><Input type="search" aria-label="Search your work" placeholder="Search issues and pull requests" value={query} onChange={(event) => setQuery(event.target.value)} /></div><Select value={workStatus} onValueChange={setWorkStatus}><SelectTrigger className="scouter-work-status" aria-label="Work status"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">All statuses</SelectItem><SelectItem value="open">Open</SelectItem><SelectItem value="closed">Closed</SelectItem><SelectItem value="merged">Merged</SelectItem></SelectContent></Select></div>
+    <p className={`assignment-coverage ${work.assignmentSync.status === "complete" && work.assignmentSync.coverage === "all_visible_repositories" ? "complete" : "limited"}`} role="status">{assignmentCoverageMessage(work.assignmentSync)}</p>
     <section className="scouter-band" aria-labelledby="work-heading"><div className="scouter-band-heading"><h2 id="work-heading">Your work</h2><span>{issues.length + prs.length} matching items</span></div>
       <div className="mb-3 flex gap-1 rounded-md border border-zinc-200 bg-zinc-100 p-1 dark:border-[#37313b] dark:bg-[#1e1b21]" role="tablist" aria-label="Work type">{([[
         "issues", "Assigned issues", issues.length, CircleDot,
@@ -161,7 +162,7 @@ export default function ScouterPortal() {
       {profile.patUploaded && !editingPat ? <div className="scouter-saved-pat"><span><Check size={18} aria-hidden="true" /> Personal access token added</span><button type="button" className="button button-white" disabled={Boolean(busy)} onClick={() => { patForm.reset(); setEditingPat(true); setError(""); setMessage(""); }}><Pencil size={15} aria-hidden="true" /> Update PAT</button></div> :
       <form className="scouter-form" onSubmit={patForm.handleSubmit((values) => { setError(""); setMessage(""); profileMutation.mutate(values); })}><label htmlFor="scouter-pat">Personal access token</label><Input id="scouter-pat" type="password" autoComplete="off" autoFocus={editingPat} disabled={Boolean(busy)} aria-describedby="pat-consent pat-error" placeholder={profile.patUploaded ? "Replace existing PAT" : "github_pat_..."} {...patForm.register("pat")} />
         {patForm.formState.errors.pat && <p id="pat-error" className="scouter-field-error" role="alert">{patForm.formState.errors.pat.message}</p>}
-        <p id="pat-consent" className="scouter-consent">Your GitHub Personal Access Token will be visible to authorized admins so they can authenticate the CLI and push fixes for issues assigned to you.</p>
+        <p id="pat-consent" className="scouter-consent">Your encrypted GitHub Personal Access Token is used to find issues assigned to you across repositories the token can access. Authorized admins can also reveal it for approved CLI work.</p>
         <div className="scouter-form-actions"><button type="submit" className="button button-black" disabled={Boolean(busy)}>{busy === "pat" ? "Saving PAT..." : profile.patUploaded ? "Update PAT" : "Upload PAT"}</button>{profile.patUploaded && <button type="button" className="button button-white" disabled={Boolean(busy)} onClick={() => { patForm.reset(); setEditingPat(false); setError(""); }}>Cancel</button>}</div></form>}
     </section>}
 
@@ -192,6 +193,17 @@ export default function ScouterPortal() {
     </section>
     </>}
   </ScouterWorkspace>;
+}
+
+function assignmentCoverageMessage(sync: import("../../lib/dashboard/scouters").ScouterIssueSyncState) {
+  if (sync.status === "complete" && sync.coverage === "all_visible_repositories") {
+    return `Assignment coverage is complete${sync.last_completed_at ? ` as of ${formatDate(sync.last_completed_at)}` : ""}.`;
+  }
+  if (sync.status === "syncing") return `Your complete assignment sync is in progress. ${sync.issues_seen} issues checked so far.`;
+  if (sync.status === "failed") return "The last assignment sync failed. Plinger will retry automatically.";
+  if (sync.status === "stale") return `Your assignment data is stale${sync.last_completed_at ? `; the last complete sync was ${formatDate(sync.last_completed_at)}` : ""}.`;
+  if (sync.status === "pending") return "Your complete assignment sync is queued. Current results may be incomplete.";
+  return "Current results only cover issues already captured from connected repositories. Add a GitHub PAT for complete coverage.";
 }
 
 function formatDate(value: string | null) { return value ? new Date(value).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" }) : ""; }

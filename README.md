@@ -218,9 +218,18 @@ Set `PLINGER_PAT_ENCRYPTION_KEY` in the server environment to a base64-encoded
 Keep this key stable: changing it makes already uploaded PATs unreadable.
 The proof bucket is private and files are served only through authenticated
 routes. Uploaded proofs are reviewed as pending, confirmed, or rejected.
-Issue assignment totals use the latest stored assignee list, not a historical
-assignment ledger. An issue unassigned later will no longer count for that
-scouter.
+Apply `supabase/migrations/20260923095929_complete_scouter_issue_assignments.sql`
+before deploying complete assigned-issue synchronization. Assigned issues are
+normalized by stable GitHub account ID and the Scouters views show whether
+coverage is complete, syncing, queued, failed, or limited to connected
+repositories. A scouter who has uploaded a PAT is synchronized through
+GitHub's authenticated-user issues feed across every repository that token can
+access. Sync pages are checkpointed and resumed by the existing scheduled
+workflow; an issue must be absent from two successful complete syncs before it
+is marked unassigned, preventing interrupted or shifting pages from removing
+work prematurely. GitHub issue webhooks and app reconciliation update known
+scouter assignments immediately. Assignment timestamps from before Plinger
+started tracking remain unknown unless a later timeline backfill supplies them.
 
 ## Verified Earnings
 
