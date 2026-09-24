@@ -77,6 +77,9 @@ export async function PATCH(request: Request) {
         last_error: null,
         issue_last_error: null,
         pull_request_last_error: null,
+        recent_status: "pending",
+        recent_last_completed_at: null,
+        recent_last_error: null,
         updated_at: new Date().toISOString(),
       }, { onConflict: "account_id" });
       if (syncStateError) throw syncStateError;

@@ -145,9 +145,9 @@ export default function DashboardWorkspace({
         result.failed
           ? `Checked ${result.checked} records; ${result.failed} could not be checked.`
           : assignmentFailures
-            ? `GitHub activity was checked, but ${assignmentFailures} scouter assignment sync failed and will be retried.`
+            ? `GitHub activity was checked, but ${assignmentFailures} recent Scouter syncs failed and will be retried.`
             : result.assignmentSync && (result.assignmentSync.issuesChecked || result.assignmentSync.pullRequestsChecked)
-              ? `Checked ${result.checked} GitHub records, ${result.assignmentSync.issuesChecked} issues, ${result.assignmentSync.pullRequestsChecked} pull requests, and ${result.assignmentSync.linksChecked} links.`
+              ? `Checked ${result.checked} GitHub records, ${result.assignmentSync.issuesChecked} recent issues, ${result.assignmentSync.pullRequestsChecked} pull requests, and ${result.assignmentSync.linksChecked} links.`
           : result.skipped
             ? `Checked ${result.checked} records; ${result.skipped} unavailable repositories were disabled.`
             : `Checked ${result.checked} recent issues and linked pull requests.`,
@@ -381,7 +381,7 @@ export default function DashboardWorkspace({
                 aria-busy={pending || syncMutation.isPending}
               >
                 <RefreshCw size={15} className={pending || syncMutation.isPending ? "spinning" : ""} />
-                {pending || syncMutation.isPending ? "Syncing" : "Sync GitHub"}
+                {pending || syncMutation.isPending ? "Syncing" : "Sync recent GitHub work"}
               </button>
               <a
                 className="button button-black"

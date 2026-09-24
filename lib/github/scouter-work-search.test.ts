@@ -15,6 +15,13 @@ describe("Scouter work search", () => {
     expect(url.searchParams.get("per_page")).toBe("100");
   });
 
+  it("searches recently updated authored pull requests", () => {
+    const url = buildAuthoredPullRequestSearchUrl("GoabDev", 1, "2026-09-23T23:40:00Z");
+    expect(url.searchParams.get("q")).toBe("is:pr author:GoabDev updated:>=2026-09-23T23:40:00Z");
+    expect(url.searchParams.get("sort")).toBe("updated");
+    expect(url.searchParams.get("order")).toBe("desc");
+  });
+
   it("hydrates authored PRs and their closing issues", async () => {
     const fetchImpl = vi.fn()
       .mockResolvedValueOnce(jsonResponse({

@@ -32,6 +32,9 @@ export type ScouterIssueSyncState = {
   last_error: string | null;
   issue_last_error: string | null;
   pull_request_last_error: string | null;
+  recent_status: "pending" | "complete" | "failed";
+  recent_last_completed_at: string | null;
+  recent_last_error: string | null;
 };
 
 export type ScouterProfile = {
@@ -52,7 +55,7 @@ const issueSelect = "id,github_issue_id,github_issue_number,title,state,url,assi
 const pullRequestSelect = "id,github_pull_request_id,github_pull_request_number,title,state,url,author_login,head_ref,base_ref,merged,merged_at,mergeable,mergeable_state,updated_at";
 const repositorySelect = "id,github_repository_id,owner_login,name,full_name,private,default_branch,archived,disabled,updated_at";
 const eventSelect = "id,delivery_id,event,action,repository_full_name,sender_login,received_at";
-const syncStateSelect = "status,coverage,phase,issue_status,pull_request_status,pages_checked,issues_seen,pull_request_pages_checked,pull_requests_seen,links_seen,last_completed_at,last_error,issue_last_error,pull_request_last_error";
+const syncStateSelect = "status,coverage,phase,issue_status,pull_request_status,pages_checked,issues_seen,pull_request_pages_checked,pull_requests_seen,links_seen,last_completed_at,last_error,issue_last_error,pull_request_last_error,recent_status,recent_last_completed_at,recent_last_error";
 
 function effectiveSyncState(state: ScouterIssueSyncState) {
   if (state.status !== "complete" || !state.last_completed_at) return state;
@@ -260,6 +263,9 @@ export async function getScouterProfile(login: string): Promise<ScouterProfile |
           last_error: null,
           issue_last_error: null,
           pull_request_last_error: null,
+          recent_status: "pending",
+          recent_last_completed_at: null,
+          recent_last_error: null,
         },
   };
 }

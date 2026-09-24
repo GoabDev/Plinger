@@ -128,26 +128,26 @@ the complete PEM contents from the Plinger GitHub App settings. Keep it
 server-side and never commit it. Locally, `GITHUB_PRIVATE_KEY_PATH` may point
 to the PEM file instead. GitHub installation tokens are generated on demand;
 users do not need to give Plinger a personal access token for monitoring.
-The scouter portal separately accepts a PAT for admin CLI work on assigned issues.
+The scouter portal separately accepts a PAT for Scouter work discovery and approved admin CLI work.
 
 Issue and PR webhooks reconcile GitHub's closing-keyword and manually linked
 relationships. The dashboard shows recent closed issues and merge states only
 for linked PRs. An unknown merge state is shown as "Checking," not "Ready."
-The admin-only **Sync GitHub** button seeds the latest 12 issues from each of
-up to 10 connected repositories and rechecks up to 20 linked open PRs. This
-also discovers older links without redelivering webhooks. Issue and PR webhooks
-keep those records current, and base-branch pushes recheck linked open PRs.
-CI-only and review changes may not produce those webhooks; use **Sync GitHub**
-to check their latest status. The sync is intentionally bounded, so older
-records beyond the latest 12 issues per repository are not backfilled yet.
+The admin-only **Sync recent GitHub work** button checks recent assigned issues
+and authored PRs for every Scouter with a PAT, plus up to 20 linked open PRs.
+The scheduled full mode also checks recent issues in up to 10 connected
+repositories and advances the historical Scouter scan. Issue and PR webhooks
+keep App-connected records current, and base-branch pushes recheck linked open
+PRs. CI-only and review changes may not produce those webhooks; use the button
+to check their latest status.
 
 ## Automatic Sync
 
 The GitHub Actions workflow in `.github/workflows/sync-github.yml` calls the
-same protected sync endpoint. It polls a rotating batch of 20 linked PRs four
-times an hour and runs the bounded full sync once daily. Webhooks remain the
-primary path for immediate issue and PR changes, and **Sync GitHub** remains
-available for an on-demand full check. Scheduled runs may be delayed or missed
+same protected sync endpoint. It polls recent work for every Scouter and a
+rotating batch of 20 linked PRs four times an hour. A separate run every two
+hours advances the bounded historical scan. Webhooks update installed repositories immediately,
+and **Sync recent GitHub work** runs an on-demand check. Scheduled runs may be delayed or missed
 by GitHub Actions, so this is periodic reconciliation rather than a guarantee
 of exact 15-minute freshness.
 
@@ -173,7 +173,7 @@ Before the first production test:
    `GITHUB_PRIVATE_KEY` variable. Keep `GITHUB_WEBHOOK_SECRET` configured.
 3. Deploy the current code. Environment variable edits affect new deployments,
    not deployments already running.
-4. Sign in, click **Sync GitHub**, and confirm recent issues and linked PRs load.
+4. Sign in, click **Sync recent GitHub work**, and confirm recent issues and linked PRs load.
    Open/close an issue or update a linked PR to verify webhook-driven changes.
 
 If testing locally, update `GITHUB_PRIVATE_KEY_PATH` to the newly rotated PEM;
@@ -218,16 +218,22 @@ Set `PLINGER_PAT_ENCRYPTION_KEY` in the server environment to a base64-encoded
 Keep this key stable: changing it makes already uploaded PATs unreadable.
 The proof bucket is private and files are served only through authenticated
 routes. Uploaded proofs are reviewed as pending, confirmed, or rejected.
-Apply `supabase/migrations/20260923095929_complete_scouter_issue_assignments.sql`
-and `supabase/migrations/20260923211806_extend_scouter_work_sync.sql` before
+Apply `supabase/migrations/20260923095929_complete_scouter_issue_assignments.sql`,
+`supabase/migrations/20260923211806_extend_scouter_work_sync.sql`, and
+`supabase/migrations/20260924120002_add_scouter_incremental_sync.sql` before
 deploying complete Scouter work synchronization. For every Scouter with an
 uploaded PAT, the scheduled and on-demand sync searches all repositories that
 token can see for assigned issues and authored pull requests, then records
-GitHub's issue-to-PR closing relationships in both directions. Issue and PR
-phases are checkpointed independently, and the Scouters views report their
-counts and failure states. An issue must be absent from two successful complete
-syncs before it is marked unassigned, preventing interrupted or shifting pages
-from removing work prematurely. GitHub App webhooks continue to update known
+GitHub's issue-to-PR closing relationships in both directions. The dashboard
+button and quarter-hour poll fetch recently updated work for every Scouter.
+The two-hour full job also advances a bounded historical reconciliation for three
+Scouters at a time. Recent sync starts with a two-day lookback and thereafter
+uses the last successful checkpoint with a one-hour overlap. Failed runs leave
+the checkpoint unchanged. Issue and PR full-scan phases are checkpointed
+independently, and the Scouters views report full and recent sync status. An
+issue must be absent from two successful complete historical scans before it
+is marked unassigned, preventing interrupted or shifting pages from removing
+work prematurely. GitHub App webhooks continue to update known
 records immediately where the App is installed. Comments, reviews, and full
 commit histories are not imported by this sync because the current views do
 not display them.

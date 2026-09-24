@@ -196,13 +196,16 @@ export default function ScouterPortal() {
 }
 
 function assignmentCoverageMessage(sync: import("../../lib/dashboard/scouters").ScouterIssueSyncState) {
+  const recent = sync.recent_status === "complete" && sync.recent_last_completed_at
+    ? ` Recent changes checked ${formatDate(sync.recent_last_completed_at)}.`
+    : sync.recent_status === "failed" ? " Recent change sync failed and will retry." : " Recent change sync is queued.";
   if (sync.status === "complete" && sync.coverage === "all_visible_repositories" && sync.issue_status === "complete" && sync.pull_request_status === "complete") {
-    return `Work coverage is complete: ${sync.issues_seen} assigned issues, ${sync.pull_requests_seen} authored pull requests, and ${sync.links_seen} issue links${sync.last_completed_at ? ` as of ${formatDate(sync.last_completed_at)}` : ""}.`;
+    return `Work coverage is complete: ${sync.issues_seen} assigned issues, ${sync.pull_requests_seen} authored pull requests, and ${sync.links_seen} issue links${sync.last_completed_at ? ` as of ${formatDate(sync.last_completed_at)}` : ""}.${recent}`;
   }
-  if (sync.status === "syncing") return `Your complete work sync is checking ${sync.phase === "issues" ? "assigned issues" : "authored pull requests"}. ${sync.issues_seen} issues, ${sync.pull_requests_seen} pull requests, and ${sync.links_seen} links recorded so far.`;
-  if (sync.status === "failed") return `The last ${sync.phase === "issues" ? "issue" : "pull request"} sync failed. Plinger will retry automatically.`;
-  if (sync.status === "stale") return `Your GitHub work data is stale${sync.last_completed_at ? `; the last complete sync was ${formatDate(sync.last_completed_at)}` : ""}.`;
-  if (sync.status === "pending") return "Your complete issue and pull request sync is queued. Current results may be incomplete.";
+  if (sync.status === "syncing") return `Your complete work sync is checking ${sync.phase === "issues" ? "assigned issues" : "authored pull requests"}. ${sync.issues_seen} issues, ${sync.pull_requests_seen} pull requests, and ${sync.links_seen} links recorded so far.${recent}`;
+  if (sync.status === "failed") return `The last ${sync.phase === "issues" ? "issue" : "pull request"} historical sync failed. Plinger will retry automatically.${recent}`;
+  if (sync.status === "stale") return `Your complete historical scan is stale${sync.last_completed_at ? `; the last complete scan was ${formatDate(sync.last_completed_at)}` : ""}.${recent}`;
+  if (sync.status === "pending") return `Your complete historical scan is queued. Current results may be incomplete.${recent}`;
   return "Current results only cover work already captured from connected repositories. Add a GitHub PAT for complete coverage.";
 }
 
