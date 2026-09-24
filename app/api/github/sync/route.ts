@@ -5,7 +5,7 @@ import { createAuthClient } from "../../../../lib/supabase/auth-client";
 import { isAdmin } from "../../../../lib/supabase/auth-config";
 import { createHash, timingSafeEqual } from "node:crypto";
 import { githubSyncRequestSchema } from "../../../../lib/github/contracts";
-import { syncScouterAssignmentsBatch } from "../../../../lib/github/assignment-sync";
+import { syncRecentScouterWorkBatch, syncScouterAssignmentsBatch } from "../../../../lib/github/assignment-sync";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -17,7 +17,7 @@ type RepositoryRow = { full_name: string };
 
 export async function POST(request: Request) {
   const authorization = request.headers.get("authorization");
-  let mode: "poll" | "full" = "full";
+  let mode: "poll" | "full" = "poll";
   if (authorization !== null) {
     const secret = process.env.PLINGER_SYNC_SECRET?.trim();
     if (!secret) return NextResponse.json({ error: "Scheduled sync is not configured" }, { status: 503 });
@@ -51,12 +51,8 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "GitHub App credentials are not configured" }, { status: 503 });
   }
 
-  const assignmentSyncPromise = syncScouterAssignmentsBatch({
-    maxScouters: mode === "full" ? null : 3,
-    maxPagesPerScouter: mode === "full" ? 10 : 2,
-    concurrency: 3,
-  }).catch((error) => {
-    console.error("[github:assignment-sync:batch-failed]", error);
+  const recentSyncPromise = syncRecentScouterWorkBatch({ concurrency: 3 }).catch((error) => {
+    console.error("[github:recent-scouter-sync:batch-failed]", error);
     return {
       scoutersChecked: 0,
       pagesChecked: 0,
@@ -70,7 +66,7 @@ export async function POST(request: Request) {
 
   async function syncFailureResponse(error: string, detail?: unknown) {
     console.error("[github:sync:aborted]", { error, detail });
-    const assignmentSync = await assignmentSyncPromise;
+    const assignmentSync = await recentSyncPromise;
     return NextResponse.json({ error, mode, assignmentSync }, { status: 503 });
   }
 
@@ -205,8 +201,16 @@ export async function POST(request: Request) {
     }
   }
 
-  const assignmentSync = await assignmentSyncPromise;
-  const failed = failures.length + assignmentSync.failed;
+  const assignmentSync = await recentSyncPromise;
+  const fullSync = mode === "full" ? await syncScouterAssignmentsBatch({
+    maxScouters: 3,
+    maxPagesPerScouter: 2,
+    concurrency: 2,
+  }).catch((error) => {
+    console.error("[github:full-scouter-sync:batch-failed]", error);
+    return { scoutersChecked: 0, pagesChecked: 0, issuesChecked: 0, pullRequestsChecked: 0, linksChecked: 0, completed: 0, failed: 1 };
+  }) : undefined;
+  const failed = failures.length + assignmentSync.failed + (fullSync?.failed ?? 0);
   return NextResponse.json(
     {
       checked,
@@ -215,6 +219,7 @@ export async function POST(request: Request) {
       warnings: [...new Set(warnings)],
       mode,
       assignmentSync,
+      ...(fullSync ? { fullSync } : {}),
     },
     { status: failed ? (authorization !== null ? 503 : 207) : warnings.length ? 207 : 200 },
   );

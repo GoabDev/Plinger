@@ -51,6 +51,113 @@ export type AssignmentSyncResult = {
   failed: number;
 };
 
+const RECENT_OVERLAP_MS = 60 * 60 * 1000;
+const FIRST_RECENT_LOOKBACK_MS = 2 * 24 * 60 * 60 * 1000;
+
+export async function syncRecentScouterWorkBatch({ concurrency = 3 }: { concurrency?: number } = {}): Promise<AssignmentSyncResult> {
+  const client = serviceClient();
+  const [{ data: profiles, error: profilesError }, { data: states, error: statesError }] = await Promise.all([
+    client.from("scouter_profiles").select("account_id,account_login,pat_ciphertext").not("pat_ciphertext", "is", null).limit(1000),
+    client.from("scouter_issue_sync_state").select("account_id,recent_last_completed_at").limit(1000),
+  ]);
+  if (profilesError) throw profilesError;
+  if (statesError) throw statesError;
+  const checkpoints = new Map((states ?? []).map((state) => [Number(state.account_id), state.recent_last_completed_at as string | null]));
+  const result: AssignmentSyncResult = {
+    scoutersChecked: 0, pagesChecked: 0, issuesChecked: 0, pullRequestsChecked: 0,
+    linksChecked: 0, completed: 0, failed: 0,
+  };
+  const batchSize = Math.max(1, Math.min(5, Math.floor(concurrency)));
+  const candidates = (profiles ?? []) as ScouterTokenRow[];
+  for (let index = 0; index < candidates.length; index += batchSize) {
+    const outcomes = await Promise.all(candidates.slice(index, index + batchSize).map(async (profile) => {
+      try {
+        const outcome = await syncRecentScouterWork(profile, checkpoints.get(Number(profile.account_id)) ?? null);
+        return { ...outcome, failed: false };
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        console.error("[github:recent-scouter-sync:failed]", { accountId: profile.account_id, error });
+        const { error: stateError } = await client.from("scouter_issue_sync_state").upsert({
+          account_id: profile.account_id,
+          account_login: profile.account_login,
+          coverage: "all_visible_repositories",
+          recent_status: "failed",
+          recent_last_error: message.slice(0, 500),
+          updated_at: new Date().toISOString(),
+        }, { onConflict: "account_id" });
+        if (stateError) console.error("[github:recent-scouter-sync:state-failed]", { accountId: profile.account_id, error: stateError });
+        return { pagesChecked: 0, issuesChecked: 0, pullRequestsChecked: 0, linksChecked: 0, complete: false, failed: true };
+      }
+    }));
+    for (const outcome of outcomes) {
+      result.scoutersChecked++;
+      result.pagesChecked += outcome.pagesChecked;
+      result.issuesChecked += outcome.issuesChecked;
+      result.pullRequestsChecked += outcome.pullRequestsChecked;
+      result.linksChecked += outcome.linksChecked;
+      if (outcome.complete) result.completed++;
+      if (outcome.failed) result.failed++;
+    }
+  }
+  return result;
+}
+
+async function syncRecentScouterWork(profile: ScouterTokenRow, lastCompletedAt: string | null) {
+  const startedAt = new Date();
+  const previous = lastCompletedAt ? Date.parse(lastCompletedAt) : NaN;
+  const since = new Date(Number.isFinite(previous)
+    ? previous - RECENT_OVERLAP_MS
+    : startedAt.getTime() - FIRST_RECENT_LOOKBACK_MS).toISOString();
+  const pat = decryptPat(profile.pat_ciphertext);
+  const tokenOwner = await getGitHubTokenOwner(pat);
+  if (tokenOwner.id !== Number(profile.account_id)) {
+    throw new Error(`GitHub token belongs to @${tokenOwner.login}, not @${profile.account_login}`);
+  }
+  const repositoryCache = new Map<string, GitHubRepository>();
+  const result = { pagesChecked: 0, issuesChecked: 0, pullRequestsChecked: 0, linksChecked: 0, complete: false };
+  for (let page = 1; ; page++) {
+    const response = await fetchAssignedIssuesPage({ token: pat, login: tokenOwner.login, page, updatedSince: since, repositoryCache });
+    const relationships = await fetchAssignedIssueRelationships({ token: pat, issues: response.issues });
+    await storeRecentAssignedIssuePage(profile, response.issues);
+    await storePullRequestsAndLinks({
+      pullRequests: relationships.pullRequests,
+      links: relationships.links,
+      replaceIssueIds: response.issues.flatMap((issue) => issue.id ? [issue.id] : []),
+    });
+    result.pagesChecked++;
+    result.issuesChecked += response.issues.length;
+    result.pullRequestsChecked += relationships.pullRequests.length;
+    result.linksChecked += relationships.links.length;
+    if (!response.hasNextPage) break;
+  }
+  for (let page = 1; ; page++) {
+    const response = await fetchAuthoredPullRequestsPage({ token: pat, login: tokenOwner.login, page, updatedSince: since });
+    await storeDiscoveredIssues(response.issues);
+    await storePullRequestsAndLinks({
+      pullRequests: response.pullRequests,
+      links: response.links,
+      replacePullRequestIds: response.pullRequests.map((pullRequest) => pullRequest.id),
+    });
+    result.pagesChecked++;
+    result.issuesChecked += response.issues.length;
+    result.pullRequestsChecked += response.pullRequests.length;
+    result.linksChecked += response.links.length;
+    if (!response.hasNextPage) break;
+  }
+  const { error } = await serviceClient().from("scouter_issue_sync_state").upsert({
+    account_id: profile.account_id,
+    account_login: profile.account_login,
+    coverage: "all_visible_repositories",
+    recent_status: "complete",
+    recent_last_completed_at: startedAt.toISOString(),
+    recent_last_error: null,
+    updated_at: new Date().toISOString(),
+  }, { onConflict: "account_id" });
+  if (error) throw error;
+  result.complete = true;
+  return result;
+}
+
 export async function reconcileKnownScouterAssignments({
   githubIssueId,
   assignees,
@@ -418,6 +525,39 @@ async function storeAssignedIssuePage(profile: ScouterTokenRow, runId: string, i
   if (assignmentError) throw assignmentError;
 }
 
+async function storeRecentAssignedIssuePage(profile: ScouterTokenRow, issues: GitHubAssignedIssue[]) {
+  if (!issues.length) return;
+  const storedIssues = await upsertIssues(issues);
+  if (!storedIssues.length) return;
+  const client = serviceClient();
+  const now = new Date().toISOString();
+  const issueIds = storedIssues.map((issue) => issue.id);
+  const { error: insertError } = await client.from("issue_assignments").upsert(
+    issueIds.map((issueId) => ({
+      issue_id: issueId,
+      assignee_account_id: profile.account_id,
+      assignee_login: profile.account_login,
+      active: true,
+      last_seen_at: now,
+      source: "scouter_token",
+      updated_at: now,
+    })),
+    { onConflict: "issue_id,assignee_account_id", ignoreDuplicates: true },
+  );
+  if (insertError) throw insertError;
+  // Keep last_seen_sync_id reserved for complete historical scans.
+  const { error: updateError } = await client.from("issue_assignments").update({
+    assignee_login: profile.account_login,
+    active: true,
+    unassigned_at: null,
+    last_seen_at: now,
+    missed_complete_syncs: 0,
+    source: "scouter_token",
+    updated_at: now,
+  }).eq("assignee_account_id", profile.account_id).in("issue_id", issueIds);
+  if (updateError) throw updateError;
+}
+
 async function storeDiscoveredIssues(issues: GitHubAssignedIssue[]) {
   if (issues.length) await upsertIssues(issues);
 }
@@ -487,12 +627,12 @@ async function storePullRequestsAndLinks({
     if (error) throw error;
   }
 
-  for (const githubIssueId of [...new Set(replaceIssueIds)]) {
-    const { error } = await client.from("issue_pull_requests").delete().eq("github_issue_id", githubIssueId);
+  if (replaceIssueIds.length) {
+    const { error } = await client.from("issue_pull_requests").delete().in("github_issue_id", [...new Set(replaceIssueIds)]);
     if (error) throw error;
   }
-  for (const githubPullRequestId of [...new Set(replacePullRequestIds)]) {
-    const { error } = await client.from("issue_pull_requests").delete().eq("github_pull_request_id", githubPullRequestId);
+  if (replacePullRequestIds.length) {
+    const { error } = await client.from("issue_pull_requests").delete().in("github_pull_request_id", [...new Set(replacePullRequestIds)]);
     if (error) throw error;
   }
   const rows = [...new Map(links.map((link) => [
