@@ -23,6 +23,13 @@ describe("assigned issue search", () => {
       .toBe("is:issue assignee:thisismizz2");
   });
 
+  it("searches recent updates across all visible repositories", () => {
+    const url = buildAssignedIssueSearchUrl("GoabDev", 1, "2026-09-23T23:40:00Z");
+    expect(url.searchParams.get("q")).toBe("is:issue assignee:GoabDev updated:>=2026-09-23T23:40:00Z");
+    expect(url.searchParams.get("sort")).toBe("updated");
+    expect(url.searchParams.get("order")).toBe("desc");
+  });
+
   it("hydrates repository details and reuses them across pages", async () => {
     const repositoryUrl = "https://api.github.com/repos/DigiNodes/truthbounty-frontend";
     const repository: GitHubRepository = {

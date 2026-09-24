@@ -37,7 +37,7 @@ type GitHubIssueSearchResponse = {
 
 type FetchLike = typeof fetch;
 
-export function buildAssignedIssueSearchUrl(login: string, page: number) {
+export function buildAssignedIssueSearchUrl(login: string, page: number, updatedSince?: string) {
   if (!/^[a-z\d](?:[a-z\d-]{0,37}[a-z\d])?$/i.test(login)) {
     throw new Error("GitHub account login is invalid");
   }
@@ -46,9 +46,9 @@ export function buildAssignedIssueSearchUrl(login: string, page: number) {
   }
 
   const url = new URL("/search/issues", GITHUB_API_ORIGIN);
-  url.searchParams.set("q", `is:issue assignee:${login}`);
-  url.searchParams.set("sort", "created");
-  url.searchParams.set("order", "asc");
+  url.searchParams.set("q", `is:issue assignee:${login}${updatedSince ? ` updated:>=${searchTimestamp(updatedSince)}` : ""}`);
+  url.searchParams.set("sort", updatedSince ? "updated" : "created");
+  url.searchParams.set("order", updatedSince ? "desc" : "asc");
   url.searchParams.set("per_page", String(ASSIGNED_ISSUES_PER_PAGE));
   url.searchParams.set("page", String(page));
   return url;
@@ -58,17 +58,19 @@ export async function fetchAssignedIssuesPage({
   token,
   login,
   page,
+  updatedSince,
   repositoryCache,
   fetchImpl = fetch,
 }: {
   token: string;
   login: string;
   page: number;
+  updatedSince?: string;
   repositoryCache: Map<string, GitHubRepository>;
   fetchImpl?: FetchLike;
 }) {
   const headers = githubHeaders(token);
-  const response = await fetchImpl(buildAssignedIssueSearchUrl(login, page), {
+  const response = await fetchImpl(buildAssignedIssueSearchUrl(login, page, updatedSince), {
     headers,
     cache: "no-store",
     signal: AbortSignal.timeout(15_000),
@@ -121,6 +123,12 @@ export async function fetchAssignedIssuesPage({
     })),
     hasNextPage: page * ASSIGNED_ISSUES_PER_PAGE < result.total_count!,
   };
+}
+
+function searchTimestamp(value: string) {
+  const timestamp = Date.parse(value);
+  if (!Number.isFinite(timestamp)) throw new Error("GitHub issue search checkpoint is invalid");
+  return new Date(timestamp).toISOString().replace(/\.\d{3}Z$/, "Z");
 }
 
 function githubHeaders(token: string) {

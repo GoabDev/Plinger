@@ -265,7 +265,11 @@ function AssignmentCoverage({ sync }: { sync: ScouterIssueSyncState }) {
           : sync.status === "pending"
             ? "Full issue and pull request sync is queued. Current results may be incomplete."
             : "Coverage is limited to work already captured from connected repositories.";
-  return <p className={`assignment-coverage ${complete ? "complete" : "limited"}`} role="status">{detail}</p>;
+  const recent = sync.coverage !== "all_visible_repositories" ? ""
+    : sync.recent_status === "complete" && sync.recent_last_completed_at
+      ? ` Recent changes checked ${formatDate(sync.recent_last_completed_at)}.`
+      : sync.recent_status === "failed" ? " Recent change sync failed and will retry." : " Recent change sync is queued.";
+  return <p className={`assignment-coverage ${complete ? "complete" : "limited"}`} role="status">{detail}{recent}</p>;
 }
 
 function ScouterAvatar({ scouter, large = false }: { scouter: ScouterRow; large?: boolean }) {

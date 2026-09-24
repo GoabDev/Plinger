@@ -3,7 +3,7 @@ name: Sync GitHub activity
 on:
   schedule:
     - cron: "7,22,37,52 * * * *"
-    - cron: "13 2 * * *"
+    - cron: "13 */2 * * *"
   workflow_dispatch:
     inputs:
       mode:
@@ -37,7 +37,7 @@ jobs:
           fi
 
           mode="${REQUESTED_MODE:-poll}"
-          if [ "$SCHEDULE" = "13 2 * * *" ]; then mode="full"; fi
+          if [ "$SCHEDULE" = "13 */2 * * *" ]; then mode="full"; fi
           case "$mode" in poll|full) ;; *) echo "Invalid sync mode"; exit 1 ;; esac
 
           curl --fail-with-body --silent --show-error \

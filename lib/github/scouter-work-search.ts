@@ -38,12 +38,12 @@ export type GitHubWorkLink = {
   githubPullRequestId: number;
 };
 
-export function buildAuthoredPullRequestSearchUrl(login: string, page: number) {
+export function buildAuthoredPullRequestSearchUrl(login: string, page: number, updatedSince?: string) {
   validateLoginAndPage(login, page);
   const url = new URL("/search/issues", GITHUB_API_ORIGIN);
-  url.searchParams.set("q", `is:pr author:${login}`);
-  url.searchParams.set("sort", "created");
-  url.searchParams.set("order", "asc");
+  url.searchParams.set("q", `is:pr author:${login}${updatedSince ? ` updated:>=${searchTimestamp(updatedSince)}` : ""}`);
+  url.searchParams.set("sort", updatedSince ? "updated" : "created");
+  url.searchParams.set("order", updatedSince ? "desc" : "asc");
   url.searchParams.set("per_page", String(RESULTS_PER_PAGE));
   url.searchParams.set("page", String(page));
   return url;
@@ -89,14 +89,16 @@ export async function fetchAuthoredPullRequestsPage({
   token,
   login,
   page,
+  updatedSince,
   fetchImpl = fetch,
 }: {
   token: string;
   login: string;
   page: number;
+  updatedSince?: string;
   fetchImpl?: FetchLike;
 }) {
-  const response = await fetchImpl(buildAuthoredPullRequestSearchUrl(login, page), {
+  const response = await fetchImpl(buildAuthoredPullRequestSearchUrl(login, page, updatedSince), {
     headers: githubHeaders(token),
     cache: "no-store",
     signal: AbortSignal.timeout(15_000),
@@ -148,6 +150,12 @@ export async function fetchAuthoredPullRequestsPage({
     links,
     hasNextPage: page * RESULTS_PER_PAGE < result.total_count!,
   };
+}
+
+function searchTimestamp(value: string) {
+  const timestamp = Date.parse(value);
+  if (!Number.isFinite(timestamp)) throw new Error("GitHub pull request search checkpoint is invalid");
+  return new Date(timestamp).toISOString().replace(/\.\d{3}Z$/, "Z");
 }
 
 async function fetchGraphNodes(
