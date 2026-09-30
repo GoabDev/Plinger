@@ -7,6 +7,7 @@ describe("sync failure descriptions", () => {
     expect(describeSyncError({ code: "42501" })).toContain("SUPABASE_SECRET_KEY");
     expect(describeSyncError(new Error("Supabase service is not configured"))).toContain("SUPABASE_URL");
     expect(describeSyncError({ message: "Invalid API key" })).toContain("database access was denied");
+    expect(describeSyncError(new Error("Scouter has no saved GitHub PAT"))).toContain("no saved GitHub PAT");
   });
 
   it("distinguishes expired tokens from encryption-key problems", () => {

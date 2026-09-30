@@ -13,6 +13,11 @@ on:
           - poll
           - full
         default: full
+      scouter:
+        description: Optional GitHub login to sync only one Scouter
+        type: string
+        required: false
+        default: ""
 
 permissions: {}
 
@@ -30,6 +35,7 @@ jobs:
           PLINGER_SYNC_SECRET: ${{ secrets.PLINGER_SYNC_SECRET }}
           SCHEDULE: ${{ github.event.schedule }}
           REQUESTED_MODE: ${{ inputs.mode }}
+          REQUESTED_SCOUTER: ${{ inputs.scouter }}
         run: |
           if [ -z "${PLINGER_SYNC_SECRET:-}" ]; then
             echo "PLINGER_SYNC_SECRET is not configured"
@@ -40,9 +46,12 @@ jobs:
           if [ "$SCHEDULE" = "13 */2 * * *" ]; then mode="full"; fi
           case "$mode" in poll|full) ;; *) echo "Invalid sync mode"; exit 1 ;; esac
 
+          payload=$(jq -n --arg mode "$mode" --arg scouter "${REQUESTED_SCOUTER:-}" \
+            '{mode: $mode} + (if $scouter == "" then {} else {scouterLogin: $scouter} end)')
+
           curl --fail-with-body --silent --show-error \
             --connect-timeout 10 --max-time 290 \
             --request POST "https://plinger.vercel.app/api/github/sync" \
             --header "Authorization: Bearer ${PLINGER_SYNC_SECRET}" \
             --header "Content-Type: application/json" \
-            --data "{\"mode\":\"${mode}\"}"
+            --data "$payload"

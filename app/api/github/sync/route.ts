@@ -19,6 +19,7 @@ type RepositoryRow = { full_name: string };
 export async function POST(request: Request) {
   const authorization = request.headers.get("authorization");
   let mode: "poll" | "full" = "poll";
+  let scouterLogin: string | undefined;
   if (authorization !== null) {
     const secret = process.env.PLINGER_SYNC_SECRET?.trim();
     if (!secret) return NextResponse.json({ error: "Scheduled sync is not configured" }, { status: 503 });
@@ -39,6 +40,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Invalid sync mode" }, { status: 400 });
     }
     mode = parsed.data.mode;
+    scouterLogin = parsed.data.scouterLogin;
   } else {
     if (request.headers.get("sec-fetch-site") === "cross-site") {
       return NextResponse.json({ error: "Not authorized" }, { status: 403 });
@@ -52,7 +54,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "GitHub App credentials are not configured" }, { status: 503 });
   }
 
-  const recentSyncPromise = syncRecentScouterWorkBatch({ concurrency: 3 }).catch((error) => {
+  const recentSyncPromise = syncRecentScouterWorkBatch({ concurrency: 3, ...(scouterLogin ? { login: scouterLogin } : {}) }).catch((error) => {
     console.error("[github:recent-scouter-sync:batch-failed]", error);
     return {
       scoutersChecked: 0,
@@ -72,7 +74,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error, mode, assignmentSync }, { status: 503 });
   }
 
-  const repositories = mode === "full" ? await selectSupabaseRows<RepositoryRow>({
+  const repositories = mode === "full" && !scouterLogin ? await selectSupabaseRows<RepositoryRow>({
     table: "repositories",
     query: { select: "full_name", disabled: "eq.false", order: "updated_at.desc", limit: "10" },
   }) : { data: [] as RepositoryRow[] };
@@ -154,7 +156,7 @@ export async function POST(request: Request) {
     }
   }
 
-  const linkCount = await selectSupabaseRows<LinkRow>({
+  const linkCount = scouterLogin ? { data: [] as LinkRow[], count: 0, skipped: false, error: undefined } : await selectSupabaseRows<LinkRow>({
     table: "issue_pull_requests",
     query: { select: "github_pull_request_id", limit: "0" },
     count: "exact",
@@ -162,7 +164,7 @@ export async function POST(request: Request) {
   if (linkCount.skipped || linkCount.error || linkCount.count === undefined) {
     console.error("[github:sync:linked-pr-count-failed]", { error: linkCount.error, skipped: linkCount.skipped });
     warnings.push("linked-pull-requests");
-  } else {
+  } else if (linkCount.count > 0) {
     const pageCount = Math.ceil(linkCount.count / 20);
     const offset = mode === "poll" && pageCount
       ? (Math.floor(Date.now() / 900_000) % pageCount) * 20
@@ -205,9 +207,10 @@ export async function POST(request: Request) {
 
   const assignmentSync = await recentSyncPromise;
   const fullSync = mode === "full" ? await syncScouterAssignmentsBatch({
-    maxScouters: 3,
-    maxPagesPerScouter: 2,
+    maxScouters: scouterLogin ? 1 : 3,
+    maxPagesPerScouter: scouterLogin ? 5 : 2,
     concurrency: 2,
+    ...(scouterLogin ? { login: scouterLogin } : {}),
   }).catch((error) => {
     console.error("[github:full-scouter-sync:batch-failed]", error);
     return { scoutersChecked: 0, pagesChecked: 0, issuesChecked: 0, pullRequestsChecked: 0, linksChecked: 0, completed: 0, failed: 1, errors: [`Full work sync: ${describeSyncError(error)}`] };
@@ -225,6 +228,7 @@ export async function POST(request: Request) {
       skipped: [...new Set(skipped)].length,
       warnings: [...new Set(warnings)],
       mode,
+      ...(scouterLogin ? { scouterLogin } : {}),
       errors,
       ...(failed ? { error: errors[0] ?? "Some GitHub records could not be synced. Check the Vercel runtime logs." } : {}),
       assignmentSync,

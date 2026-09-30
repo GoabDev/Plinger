@@ -56,14 +56,16 @@ export type AssignmentSyncResult = {
 const RECENT_OVERLAP_MS = 60 * 60 * 1000;
 const FIRST_RECENT_LOOKBACK_MS = 2 * 24 * 60 * 60 * 1000;
 
-export async function syncRecentScouterWorkBatch({ concurrency = 3 }: { concurrency?: number } = {}): Promise<AssignmentSyncResult> {
+export async function syncRecentScouterWorkBatch({ concurrency = 3, login }: { concurrency?: number; login?: string } = {}): Promise<AssignmentSyncResult> {
   const client = serviceClient();
+  const profilesQuery = client.from("scouter_profiles").select("account_id,account_login,pat_ciphertext").not("pat_ciphertext", "is", null).limit(1000);
   const [{ data: profiles, error: profilesError }, { data: states, error: statesError }] = await Promise.all([
-    client.from("scouter_profiles").select("account_id,account_login,pat_ciphertext").not("pat_ciphertext", "is", null).limit(1000),
+    login ? profilesQuery.ilike("account_login", login) : profilesQuery,
     client.from("scouter_issue_sync_state").select("account_id,recent_last_completed_at").limit(1000),
   ]);
   if (profilesError) throw profilesError;
   if (statesError) throw statesError;
+  if (login && !profiles?.length) throw new Error("Scouter has no saved GitHub PAT");
   const checkpoints = new Map((states ?? []).map((state) => [Number(state.account_id), state.recent_last_completed_at as string | null]));
   const result: AssignmentSyncResult = {
     scoutersChecked: 0, pagesChecked: 0, issuesChecked: 0, pullRequestsChecked: 0,
@@ -264,23 +266,27 @@ export async function syncScouterAssignmentsBatch({
   maxScouters = 1,
   maxPagesPerScouter = 5,
   concurrency = 1,
+  login,
 }: {
   maxScouters?: number | null;
   maxPagesPerScouter?: number;
   concurrency?: number;
+  login?: string;
 } = {}): Promise<AssignmentSyncResult> {
   const client = serviceClient();
+  const profilesQuery = client.from("scouter_profiles")
+    .select("account_id,account_login,pat_ciphertext")
+    .not("pat_ciphertext", "is", null)
+    .limit(1000);
   const [{ data: profiles, error: profilesError }, { data: states, error: statesError }] = await Promise.all([
-    client.from("scouter_profiles")
-      .select("account_id,account_login,pat_ciphertext")
-      .not("pat_ciphertext", "is", null)
-      .limit(1000),
+    login ? profilesQuery.ilike("account_login", login) : profilesQuery,
     client.from("scouter_issue_sync_state")
       .select("account_id,status,sync_run_id,phase,next_page,pages_checked,issues_seen,issue_status,pull_request_status,pull_request_pages_checked,pull_requests_seen,links_seen,last_completed_at,updated_at")
       .limit(1000),
   ]);
   if (profilesError) throw profilesError;
   if (statesError) throw statesError;
+  if (login && !profiles?.length) throw new Error("Scouter has no saved GitHub PAT");
 
   const stateByAccount = new Map((states as SyncStateRow[] | null)?.map((state) => [Number(state.account_id), state]));
   const candidates = (profiles as ScouterTokenRow[] | null ?? [])

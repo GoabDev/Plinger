@@ -16,6 +16,9 @@ export function describeSyncError(error: unknown): string {
   if (message === "Supabase service is not configured") {
     return "Sync database is not configured. Set SUPABASE_URL and SUPABASE_SECRET_KEY (or SUPABASE_SERVICE_ROLE_KEY) in Vercel.";
   }
+  if (message === "Scouter has no saved GitHub PAT") {
+    return "This Scouter has no saved GitHub PAT. Save a PAT in the Scouter portal before syncing.";
+  }
   if (message === "PAT encryption key must be 32 bytes in base64") {
     return "Saved GitHub tokens cannot be read. Set PLINGER_PAT_ENCRYPTION_KEY to the original 32-byte base64 encryption key.";
   }

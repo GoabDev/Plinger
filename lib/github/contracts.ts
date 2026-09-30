@@ -1,6 +1,9 @@
 import { z } from "zod";
 
-export const githubSyncRequestSchema = z.object({ mode: z.enum(["poll", "full"]) });
+export const githubSyncRequestSchema = z.object({
+  mode: z.enum(["poll", "full"]),
+  scouterLogin: z.string().trim().regex(/^[a-z\d](?:[a-z\d-]{0,37}[a-z\d])?$/i).optional(),
+});
 export const githubSyncResultSchema = z.object({
   checked: z.number().int().nonnegative(),
   failed: z.number().int().nonnegative(),

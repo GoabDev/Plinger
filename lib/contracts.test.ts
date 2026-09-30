@@ -57,6 +57,8 @@ describe("shared validation contracts", () => {
   it("validates GitHub sync responses", () => {
     expect(githubSyncRequestSchema.safeParse({ mode: "poll" }).success).toBe(true);
     expect(githubSyncRequestSchema.safeParse({ mode: "partial" }).success).toBe(false);
+    expect(githubSyncRequestSchema.parse({ mode: "full", scouterLogin: " zazorplayz " }).scouterLogin).toBe("zazorplayz");
+    expect(githubSyncRequestSchema.safeParse({ mode: "full", scouterLogin: "zazorplayz%" }).success).toBe(false);
     expect(githubSyncResultSchema.safeParse({ checked: 2, failed: 0, skipped: 1, mode: "full" }).success).toBe(true);
     expect(githubSyncResultSchema.safeParse({
       checked: 2,

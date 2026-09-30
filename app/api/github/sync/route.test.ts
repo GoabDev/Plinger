@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { POST } from "./route";
 import { syncRecentScouterWorkBatch, syncScouterAssignmentsBatch } from "../../../../lib/github/assignment-sync";
+import { selectSupabaseRows } from "../../../../lib/supabase/server";
 
 vi.mock("../../../../lib/github/monitor", () => ({ syncGitHubSubject: vi.fn(), syncRepositoryIssues: vi.fn() }));
 vi.mock("../../../../lib/supabase/server", () => ({
@@ -18,6 +19,7 @@ vi.mock("../../../../lib/github/assignment-sync", () => ({
 const completed = { scoutersChecked: 1, pagesChecked: 2, issuesChecked: 1, pullRequestsChecked: 1, linksChecked: 1, completed: 1, failed: 0 };
 
 beforeEach(() => {
+  vi.clearAllMocks();
   vi.stubEnv("GITHUB_APP_ID", "1");
   vi.stubEnv("GITHUB_PRIVATE_KEY", "test-key");
   vi.stubEnv("PLINGER_SYNC_SECRET", "test-secret");
@@ -28,9 +30,9 @@ beforeEach(() => {
 
 afterEach(() => { vi.restoreAllMocks(); vi.unstubAllEnvs(); });
 
-function scheduledRequest(mode = "poll") {
+function scheduledRequest(mode = "poll", scouterLogin?: string) {
   return new Request("https://plinger.example/api/github/sync", {
-    method: "POST", headers: { authorization: "Bearer test-secret", "content-type": "application/json" }, body: JSON.stringify({ mode }),
+    method: "POST", headers: { authorization: "Bearer test-secret", "content-type": "application/json" }, body: JSON.stringify({ mode, scouterLogin }),
   });
 }
 
@@ -72,5 +74,20 @@ describe("sync failure responses", () => {
     expect(body.failed).toBe(0);
     expect(body.errors).toEqual([]);
     expect(body.error).toBeUndefined();
+  });
+
+  it("targets both recent and full imports to the requested Scouter", async () => {
+    const response = await POST(scheduledRequest("full", "zazorplayz"));
+    expect(response.status).toBe(200);
+    expect(vi.mocked(syncRecentScouterWorkBatch)).toHaveBeenCalledWith({ concurrency: 3, login: "zazorplayz" });
+    expect(vi.mocked(syncScouterAssignmentsBatch)).toHaveBeenCalledWith({ maxScouters: 1, maxPagesPerScouter: 5, concurrency: 2, login: "zazorplayz" });
+    expect((await response.json()).scouterLogin).toBe("zazorplayz");
+    expect(selectSupabaseRows).not.toHaveBeenCalled();
+  });
+
+  it("rejects malformed target logins before attempting any imports", async () => {
+    const response = await POST(scheduledRequest("full", "zazorplayz%"));
+    expect(response.status).toBe(400);
+    expect(syncRecentScouterWorkBatch).not.toHaveBeenCalled();
   });
 });
