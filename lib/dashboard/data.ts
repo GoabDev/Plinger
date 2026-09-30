@@ -1,4 +1,4 @@
-import { selectSupabaseRows } from "../supabase/server";
+import { selectAllSupabaseRows, selectSupabaseRows } from "../supabase/server";
 import { getScouterDirectory } from "./scouters";
 
 export type RepositoryRow = {
@@ -70,12 +70,11 @@ export type InstallationRow = {
 };
 
 export async function getDashboardData() {
-  const linksPromise = selectSupabaseRows<IssuePullRequestRow>({
+  const linksPromise = selectAllSupabaseRows<IssuePullRequestRow>({
     table: "issue_pull_requests",
     query: {
       select: "github_issue_id,github_pull_request_id",
-      order: "updated_at.desc",
-      limit: "200",
+      order: "updated_at.desc,github_issue_id.asc,github_pull_request_id.asc",
     },
   });
   const repositoriesPromise = selectSupabaseRows<RepositoryRow>({
@@ -87,23 +86,21 @@ export async function getDashboardData() {
       limit: "20",
     },
   });
-  const openIssuesPromise = selectSupabaseRows<IssueRow>({
+  const openIssuesPromise = selectAllSupabaseRows<IssueRow>({
     table: "issues",
     query: {
       select:
         "id,github_issue_id,github_issue_number,title,state,url,assignee_logins,labels,opened_at,closed_at,updated_at",
       state: "eq.open",
-      order: "updated_at.desc",
-      limit: "50",
+      order: "updated_at.desc,github_issue_id.asc",
     },
   });
-  const closedIssuesPromise = selectSupabaseRows<IssueRow>({
+  const closedIssuesPromise = selectAllSupabaseRows<IssueRow>({
     table: "issues",
     query: {
       select: "id,github_issue_id,github_issue_number,title,state,url,assignee_logins,labels,opened_at,closed_at,updated_at",
       state: "eq.closed",
-      order: "closed_at.desc.nullslast",
-      limit: "20",
+      order: "closed_at.desc.nullslast,github_issue_id.asc",
     },
   });
   const recentEventsPromise = selectSupabaseRows<WebhookEventRow>({
@@ -127,20 +124,7 @@ export async function getDashboardData() {
   const scoutersPromise = getScouterDirectory(true);
   const links = await linksPromise;
   const linkedPrIds = [...new Set(links.data.map((link) => String(link.github_pull_request_id)))];
-  const linkedPullRequestsPromise = linkedPrIds.length ? selectSupabaseRows<PullRequestRow>({
-    table: "pull_requests",
-    query: {
-      select:
-        "id,github_pull_request_id,github_pull_request_number,title,state,url,author_login,head_ref,base_ref,merged,merged_at,mergeable,mergeable_state,updated_at",
-      github_pull_request_id: `in.(${linkedPrIds.join(",")})`,
-      order: "updated_at.desc",
-      limit: "200",
-    },
-  }) : Promise.resolve({
-    data: [] as PullRequestRow[],
-    skipped: false,
-    error: undefined as string | undefined,
-  });
+  const linkedPullRequestsPromise = getLinkedPullRequests(linkedPrIds);
   const [
     repositories,
     openIssues,
@@ -197,4 +181,23 @@ export async function getDashboardData() {
       links.error,
     ].filter((error): error is string => Boolean(error)),
   };
+}
+
+async function getLinkedPullRequests(ids: string[]) {
+  const data: PullRequestRow[] = [];
+  // Keep each IN filter small enough for a request URL, even with large GitHub IDs.
+  for (let index = 0; index < ids.length; index += 100) {
+    const batch = await selectAllSupabaseRows<PullRequestRow>({
+      table: "pull_requests",
+      query: {
+        select: "id,github_pull_request_id,github_pull_request_number,title,state,url,author_login,head_ref,base_ref,merged,merged_at,mergeable,mergeable_state,updated_at",
+        github_pull_request_id: `in.(${ids.slice(index, index + 100).join(",")})`,
+        order: "updated_at.desc,github_pull_request_id.asc",
+      },
+    });
+    if (batch.error || batch.skipped) return { ...batch, data: [] };
+    data.push(...batch.data);
+  }
+  data.sort((a, b) => b.updated_at.localeCompare(a.updated_at) || a.github_pull_request_id - b.github_pull_request_id);
+  return { data, skipped: false, error: undefined };
 }

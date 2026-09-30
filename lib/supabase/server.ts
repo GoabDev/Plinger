@@ -15,6 +15,35 @@ export function isSupabaseConfigured() {
   return Boolean(process.env.SUPABASE_URL && getSupabaseSecretKey());
 }
 
+// Advance by the rows actually returned: the API can enforce a smaller page size.
+// Callers must supply a deterministic order, including a unique tie breaker.
+export async function selectAllSupabaseRows<T>({
+  table,
+  query,
+}: {
+  table: string;
+  query: Record<string, string>;
+}): Promise<SupabaseSelectResult<T>> {
+  const data: T[] = [];
+  for (;;) {
+    const page = await selectSupabaseRows<T>({
+      table,
+      query: { ...query, limit: "500", offset: String(data.length) },
+      count: "exact",
+    });
+    if (page.error || page.skipped) return { ...page, data: [] };
+    data.push(...page.data);
+    if (page.count !== undefined && data.length >= page.count) {
+      return { data, count: data.length };
+    }
+    if (!page.data.length) {
+      return page.count !== undefined && data.length < page.count
+        ? { data: [], error: `Incomplete paginated read of ${table}` }
+        : { data, count: data.length };
+    }
+  }
+}
+
 export async function selectSupabaseRows<T>({
   table,
   query,
