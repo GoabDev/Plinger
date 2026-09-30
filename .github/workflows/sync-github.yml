@@ -13,6 +13,11 @@ on:
           - poll
           - full
         default: full
+      month:
+        description: Activity month (YYYY-MM), or all for history recovery; blank uses current UTC month
+        type: string
+        required: false
+        default: ""
       scouter:
         description: Optional GitHub login to sync only one Scouter
         type: string
@@ -34,6 +39,7 @@ jobs:
         env:
           PLINGER_SYNC_SECRET: ${{ secrets.PLINGER_SYNC_SECRET }}
           SCHEDULE: ${{ github.event.schedule }}
+          REQUESTED_MONTH: ${{ inputs.month }}
           REQUESTED_MODE: ${{ inputs.mode }}
           REQUESTED_SCOUTER: ${{ inputs.scouter }}
         run: |
@@ -46,8 +52,8 @@ jobs:
           if [ "$SCHEDULE" = "13 */2 * * *" ]; then mode="full"; fi
           case "$mode" in poll|full) ;; *) echo "Invalid sync mode"; exit 1 ;; esac
 
-          payload=$(jq -n --arg mode "$mode" --arg scouter "${REQUESTED_SCOUTER:-}" \
-            '{mode: $mode} + (if $scouter == "" then {} else {scouterLogin: $scouter} end)')
+          payload=$(jq -n --arg month "${REQUESTED_MONTH:-$(date -u +%Y-%m)}" --arg mode "$mode" --arg scouter "${REQUESTED_SCOUTER:-}" \
+            '{mode: $mode, month: $month} + (if $scouter == "" then {} else {scouterLogin: $scouter} end)')
 
           curl --fail-with-body --silent --show-error \
             --connect-timeout 10 --max-time 290 \

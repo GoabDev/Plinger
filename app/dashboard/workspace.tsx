@@ -1,5 +1,6 @@
 "use client";
 
+import { currentMonth } from "../../lib/activity-month";
 import { useEffect, useRef, useState, useTransition } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
@@ -66,6 +67,7 @@ type View =
   | "scouters"
   | "earnings";
 type Props = {
+  month: string;
   repositories: RepositoryRow[];
   issues: IssueRow[];
   closedIssues: IssueRow[];
@@ -106,6 +108,7 @@ const subtitles: Record<View, string> = {
 };
 
 export default function DashboardWorkspace({
+  month,
   repositories,
   issues,
   closedIssues,
@@ -137,7 +140,7 @@ export default function DashboardWorkspace({
   const [syncFailed, setSyncFailed] = useState(false);
   const syncMutation = useMutation({
     mutationKey: githubSyncMutationKey,
-    mutationFn: syncGitHub,
+    mutationFn: () => syncGitHub(month),
     onSuccess: (result) => {
       const assignmentFailures = result.assignmentSync?.failed ?? 0;
       setSyncFailed(Boolean(result.failed || assignmentFailures));
@@ -381,7 +384,7 @@ export default function DashboardWorkspace({
                 aria-busy={pending || syncMutation.isPending}
               >
                 <RefreshCw size={15} className={pending || syncMutation.isPending ? "spinning" : ""} />
-                {pending || syncMutation.isPending ? "Syncing" : "Sync recent GitHub work"}
+                {pending || syncMutation.isPending ? "Syncing" : month === "all" ? "Sync all history" : "Sync selected month"}
               </button>
               <a
                 className="button button-black"
@@ -394,6 +397,19 @@ export default function DashboardWorkspace({
               </a>
             </div>}
           </div>
+          {view !== "scouters" && view !== "earnings" && (
+            <div className="filter-bar activity-period" aria-label="Activity period">
+              <label htmlFor="activity-month">Wave month (UTC)</label>
+              <input id="activity-month" type="month" min="1900-01" max="2199-12"
+                value={month === "all" ? "" : month} disabled={pending || syncMutation.isPending}
+                onChange={(event) => { if (event.target.value) startTransition(() => router.push(`/dashboard?month=${event.target.value}`, { scroll: false })); }} />
+              <button className="button button-white" disabled={pending || syncMutation.isPending}
+                onClick={() => startTransition(() => router.push(`/dashboard?month=${currentMonth()}`, { scroll: false }))}>Current month</button>
+              <button className="button button-white" disabled={pending || syncMutation.isPending} aria-pressed={month === "all"}
+                onClick={() => startTransition(() => router.push("/dashboard?month=all", { scroll: false }))}>All time</button>
+              <span className="snapshot-note">{month === "all" ? "All synced history" : "Opened work, closures and merges in this month"}</span>
+            </div>
+          )}
           <AnimatePresence initial={false}>
             {syncMessage ? (
               <motion.p
@@ -482,7 +498,7 @@ export default function DashboardWorkspace({
               )}
             </label>
             <span className="snapshot-note">
-              Recently updated records <span>·</span>
+              {month === "all" ? "All time" : month} <span>·</span>
               <time dateTime={new Date(fetchedAt).toISOString()}>
                 Refreshed {new Date(fetchedAt).toISOString().slice(11, 16)} UTC
               </time>

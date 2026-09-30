@@ -37,7 +37,7 @@ type GitHubIssueSearchResponse = {
 
 type FetchLike = typeof fetch;
 
-export function buildAssignedIssueSearchUrl(login: string, page: number, updatedSince?: string) {
+export function buildAssignedIssueSearchUrl(login: string, page: number, updatedSince?: string, dateFilter?: string) {
   if (!/^[a-z\d](?:[a-z\d-]{0,37}[a-z\d])?$/i.test(login)) {
     throw new Error("GitHub account login is invalid");
   }
@@ -46,7 +46,7 @@ export function buildAssignedIssueSearchUrl(login: string, page: number, updated
   }
 
   const url = new URL("/search/issues", GITHUB_API_ORIGIN);
-  url.searchParams.set("q", `is:issue assignee:${login}${updatedSince ? ` updated:>=${searchTimestamp(updatedSince)}` : ""}`);
+  url.searchParams.set("q", `is:issue assignee:${login}${updatedSince ? ` updated:>=${searchTimestamp(updatedSince)}` : ""}${dateFilter ? ` ${dateFilter}` : ""}`);
   url.searchParams.set("sort", updatedSince ? "updated" : "created");
   url.searchParams.set("order", updatedSince ? "desc" : "asc");
   url.searchParams.set("per_page", String(ASSIGNED_ISSUES_PER_PAGE));
@@ -59,6 +59,7 @@ export async function fetchAssignedIssuesPage({
   login,
   page,
   updatedSince,
+  dateFilter,
   repositoryCache,
   fetchImpl = fetch,
 }: {
@@ -66,11 +67,12 @@ export async function fetchAssignedIssuesPage({
   login: string;
   page: number;
   updatedSince?: string;
+  dateFilter?: string;
   repositoryCache: Map<string, GitHubRepository>;
   fetchImpl?: FetchLike;
 }) {
   const headers = githubHeaders(token);
-  const response = await fetchImpl(buildAssignedIssueSearchUrl(login, page, updatedSince), {
+  const response = await fetchImpl(buildAssignedIssueSearchUrl(login, page, updatedSince, dateFilter), {
     headers,
     cache: "no-store",
     signal: AbortSignal.timeout(15_000),

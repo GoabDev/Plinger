@@ -1,7 +1,9 @@
+import { isActivityMonth } from "../activity-month";
 import { z } from "zod";
 
 export const githubSyncRequestSchema = z.object({
   mode: z.enum(["poll", "full"]),
+  month: z.string().refine((value) => value === "all" || isActivityMonth(value)).optional(),
   scouterLogin: z.string().trim().regex(/^[a-z\d](?:[a-z\d-]{0,37}[a-z\d])?$/i).optional(),
 });
 export const githubSyncResultSchema = z.object({

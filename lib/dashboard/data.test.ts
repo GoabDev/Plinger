@@ -11,6 +11,34 @@ afterEach(() => {
 });
 
 describe("dashboard work coverage", () => {
+  it("filters by creation, closure and merge dates instead of the latest update date", async () => {
+    vi.stubEnv("SUPABASE_URL", "https://database.example");
+    vi.stubEnv("SUPABASE_SECRET_KEY", "test-key");
+    vi.stubGlobal("fetch", vi.fn(async (input: URL | RequestInfo) => {
+      const url = new URL(String(input));
+      const table = url.pathname.split("/").at(-1);
+      let rows: unknown[] = [];
+      if (table === "issues") {
+        const column = url.searchParams.get("state") === "eq.open" ? "opened_at" : "closed_at";
+        expect(url.searchParams.get("and")).toBe(`(${column}.gte.2026-09-01T00:00:00.000Z,${column}.lt.2026-10-01T00:00:00.000Z)`);
+      }
+      if (table === "webhook_events") expect(url.searchParams.get("and")).toContain("received_at.gte.2026-09-01");
+      if (table === "pull_requests") {
+        expect(url.searchParams.get("or")).toContain("and(merged_at.gte.2026-09-01");
+        rows = [
+          { github_pull_request_id: 1, state: "open", merged: false, opened_at: "2026-09-01T00:00:00Z" },
+          { github_pull_request_id: 2, state: "closed", merged: true, opened_at: "2025-01-01T00:00:00Z", merged_at: "2026-09-30T23:59:59Z" },
+          { github_pull_request_id: 3, state: "closed", merged: false, opened_at: "2025-01-01T00:00:00Z", closed_at: "2026-09-10T00:00:00Z" },
+          { github_pull_request_id: 4, state: "closed", merged: true, opened_at: "2026-09-01T00:00:00Z", merged_at: "2026-10-01T00:00:00Z" },
+        ];
+      }
+      return new Response(JSON.stringify(rows), { headers: { "content-range": `*/${rows.length}` } });
+    }));
+    const result = await getDashboardData("2026-09");
+    expect(result.openPullRequests.data.map((pr) => pr.github_pull_request_id)).toEqual([1, 3]);
+    expect(result.mergedPullRequests.data.map((pr) => pr.github_pull_request_id)).toEqual([2]);
+  });
+
   it("loads beyond the old issue/link caps and the API row cap, including older linked PRs", async () => {
     vi.stubEnv("SUPABASE_URL", "https://database.example");
     vi.stubEnv("SUPABASE_SECRET_KEY", "test-key");
@@ -48,7 +76,7 @@ describe("dashboard work coverage", () => {
     });
     vi.stubGlobal("fetch", fetchMock);
 
-    const result = await getDashboardData();
+    const result = await getDashboardData("all");
 
     expect(result.openIssues.data).toHaveLength(1205);
     expect(result.closedIssues.data).toHaveLength(25);
@@ -74,7 +102,7 @@ describe("dashboard work coverage", () => {
         const rows = table === "pull_requests" ? prs : [];
         return new Response(JSON.stringify(rows), { headers: { "content-range": `*/${rows.length}` } });
       }));
-      const result = await getDashboardData();
+      const result = await getDashboardData("all");
       expect(result.openPullRequests.data.map((pr) => pr.github_pull_request_id)).toEqual([4690293495, 3]);
       expect(result.mergedPullRequests.data.map((pr) => pr.github_pull_request_id)).toEqual([2]);
       expect(result.links.data).toEqual([]);
@@ -95,7 +123,7 @@ describe("dashboard work coverage", () => {
       }
       return new Response("[]", { headers: { "content-range": "*/0" } });
     }));
-    const result = await getDashboardData();
+    const result = await getDashboardData("all");
     expect(result.openIssues.data).toEqual([]);
     expect(result.errors).toContain("Database unavailable");
   });

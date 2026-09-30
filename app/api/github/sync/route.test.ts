@@ -32,11 +32,31 @@ afterEach(() => { vi.restoreAllMocks(); vi.unstubAllEnvs(); });
 
 function scheduledRequest(mode = "poll", scouterLogin?: string) {
   return new Request("https://plinger.example/api/github/sync", {
-    method: "POST", headers: { authorization: "Bearer test-secret", "content-type": "application/json" }, body: JSON.stringify({ mode, scouterLogin }),
+    method: "POST", headers: { authorization: "Bearer test-secret", "content-type": "application/json" }, body: JSON.stringify({ mode, scouterLogin, month: "all" }),
   });
 }
 
 describe("sync failure responses", () => {
+  it("defaults routine sync to the current month without running a full history scan", async () => {
+    const response = await POST(new Request("https://plinger.example/api/github/sync", { method: "POST" }));
+    expect(response.status).toBe(200);
+    expect(syncRecentScouterWorkBatch).toHaveBeenCalledWith({ concurrency: 3, month: new Date().toISOString().slice(0, 7) });
+    expect(syncScouterAssignmentsBatch).not.toHaveBeenCalled();
+    expect(selectSupabaseRows).not.toHaveBeenCalled();
+  });
+
+  it("honors an admin's selected historical month and rejects invalid months", async () => {
+    const request = (month: string) => new Request("https://plinger.example/api/github/sync", {
+      method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ mode: "full", month }),
+    });
+    expect((await POST(request("2025-02"))).status).toBe(200);
+    expect(syncRecentScouterWorkBatch).toHaveBeenCalledWith({ concurrency: 3, month: "2025-02" });
+    expect(syncScouterAssignmentsBatch).not.toHaveBeenCalled();
+    vi.clearAllMocks();
+    expect((await POST(request("2025-13"))).status).toBe(400);
+    expect(syncRecentScouterWorkBatch).not.toHaveBeenCalled();
+  });
+
   it("returns an actionable reason when the batch fails before checking any scouters", async () => {
     vi.mocked(syncRecentScouterWorkBatch).mockRejectedValue({ code: "PGRST204", message: "private database detail" });
     const response = await POST(scheduledRequest());

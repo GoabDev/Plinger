@@ -1,3 +1,4 @@
+import { currentMonth } from "../../../../lib/activity-month";
 import { NextResponse } from "next/server";
 import { syncGitHubSubject, syncRepositoryIssues } from "../../../../lib/github/monitor";
 import { selectSupabaseRows, updateSupabaseRows } from "../../../../lib/supabase/server";
@@ -19,6 +20,7 @@ type RepositoryRow = { full_name: string };
 export async function POST(request: Request) {
   const authorization = request.headers.get("authorization");
   let mode: "poll" | "full" = "poll";
+  let month = currentMonth();
   let scouterLogin: string | undefined;
   if (authorization !== null) {
     const secret = process.env.PLINGER_SYNC_SECRET?.trim();
@@ -39,6 +41,7 @@ export async function POST(request: Request) {
     if (!parsed.success) {
       return NextResponse.json({ error: "Invalid sync mode" }, { status: 400 });
     }
+    month = parsed.data.month ?? currentMonth();
     mode = parsed.data.mode;
     scouterLogin = parsed.data.scouterLogin;
   } else {
@@ -50,11 +53,18 @@ export async function POST(request: Request) {
     const { data: auth } = await authClient.auth.getUser();
     if (!isAdmin(auth.user)) return NextResponse.json({ error: "Not authorized" }, { status: 403 });
   }
+  if (authorization === null && request.headers.get("content-type")?.includes("application/json")) {
+    const parsed = githubSyncRequestSchema.safeParse(await request.json().catch(() => null));
+    if (!parsed.success) return NextResponse.json({ error: "Invalid sync request" }, { status: 400 });
+    month = parsed.data.month ?? currentMonth();
+    mode = parsed.data.mode;
+    scouterLogin = parsed.data.scouterLogin;
+  }
   if (!process.env.GITHUB_APP_ID || !(process.env.GITHUB_PRIVATE_KEY || process.env.GITHUB_PRIVATE_KEY_PATH)) {
     return NextResponse.json({ error: "GitHub App credentials are not configured" }, { status: 503 });
   }
 
-  const recentSyncPromise = syncRecentScouterWorkBatch({ concurrency: 3, ...(scouterLogin ? { login: scouterLogin } : {}) }).catch((error) => {
+  const recentSyncPromise = syncRecentScouterWorkBatch({ concurrency: 3, ...(month !== "all" ? { month } : {}), ...(scouterLogin ? { login: scouterLogin } : {}) }).catch((error) => {
     console.error("[github:recent-scouter-sync:batch-failed]", error);
     return {
       scoutersChecked: 0,
@@ -74,7 +84,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error, mode, assignmentSync }, { status: 503 });
   }
 
-  const repositories = mode === "full" && !scouterLogin ? await selectSupabaseRows<RepositoryRow>({
+  const repositories = mode === "full" && month === "all" && !scouterLogin ? await selectSupabaseRows<RepositoryRow>({
     table: "repositories",
     query: { select: "full_name", disabled: "eq.false", order: "updated_at.desc", limit: "10" },
   }) : { data: [] as RepositoryRow[] };
@@ -156,7 +166,7 @@ export async function POST(request: Request) {
     }
   }
 
-  const linkCount = scouterLogin ? { data: [] as LinkRow[], count: 0, skipped: false, error: undefined } : await selectSupabaseRows<LinkRow>({
+  const linkCount = scouterLogin || month !== "all" ? { data: [] as LinkRow[], count: 0, skipped: false, error: undefined } : await selectSupabaseRows<LinkRow>({
     table: "issue_pull_requests",
     query: { select: "github_pull_request_id", limit: "0" },
     count: "exact",
@@ -206,7 +216,7 @@ export async function POST(request: Request) {
   }
 
   const assignmentSync = await recentSyncPromise;
-  const fullSync = mode === "full" ? await syncScouterAssignmentsBatch({
+  const fullSync = mode === "full" && month === "all" ? await syncScouterAssignmentsBatch({
     maxScouters: scouterLogin ? 1 : 3,
     maxPagesPerScouter: scouterLogin ? 5 : 2,
     concurrency: 2,
@@ -228,6 +238,7 @@ export async function POST(request: Request) {
       skipped: [...new Set(skipped)].length,
       warnings: [...new Set(warnings)],
       mode,
+      month,
       ...(scouterLogin ? { scouterLogin } : {}),
       errors,
       ...(failed ? { error: errors[0] ?? "Some GitHub records could not be synced. Check the Vercel runtime logs." } : {}),

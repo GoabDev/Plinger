@@ -38,10 +38,10 @@ export type GitHubWorkLink = {
   githubPullRequestId: number;
 };
 
-export function buildAuthoredPullRequestSearchUrl(login: string, page: number, updatedSince?: string) {
+export function buildAuthoredPullRequestSearchUrl(login: string, page: number, updatedSince?: string, dateFilter?: string) {
   validateLoginAndPage(login, page);
   const url = new URL("/search/issues", GITHUB_API_ORIGIN);
-  url.searchParams.set("q", `is:pr author:${login}${updatedSince ? ` updated:>=${searchTimestamp(updatedSince)}` : ""}`);
+  url.searchParams.set("q", `is:pr author:${login}${updatedSince ? ` updated:>=${searchTimestamp(updatedSince)}` : ""}${dateFilter ? ` ${dateFilter}` : ""}`);
   url.searchParams.set("sort", updatedSince ? "updated" : "created");
   url.searchParams.set("order", updatedSince ? "desc" : "asc");
   url.searchParams.set("per_page", String(RESULTS_PER_PAGE));
@@ -90,15 +90,17 @@ export async function fetchAuthoredPullRequestsPage({
   login,
   page,
   updatedSince,
+  dateFilter,
   fetchImpl = fetch,
 }: {
   token: string;
   login: string;
   page: number;
   updatedSince?: string;
+  dateFilter?: string;
   fetchImpl?: FetchLike;
 }) {
-  const response = await fetchImpl(buildAuthoredPullRequestSearchUrl(login, page, updatedSince), {
+  const response = await fetchImpl(buildAuthoredPullRequestSearchUrl(login, page, updatedSince, dateFilter), {
     headers: githubHeaders(token),
     cache: "no-store",
     signal: AbortSignal.timeout(15_000),

@@ -1,5 +1,6 @@
 import "server-only";
 
+import { monthSearch } from "../activity-month";
 import { randomUUID } from "node:crypto";
 import { decryptPat, serviceClient } from "../scouter/portal";
 import { getGitHubTokenOwner } from "./api";
@@ -56,7 +57,7 @@ export type AssignmentSyncResult = {
 const RECENT_OVERLAP_MS = 60 * 60 * 1000;
 const FIRST_RECENT_LOOKBACK_MS = 2 * 24 * 60 * 60 * 1000;
 
-export async function syncRecentScouterWorkBatch({ concurrency = 3, login }: { concurrency?: number; login?: string } = {}): Promise<AssignmentSyncResult> {
+export async function syncRecentScouterWorkBatch({ concurrency = 3, login, month }: { concurrency?: number; login?: string; month?: string } = {}): Promise<AssignmentSyncResult> {
   const client = serviceClient();
   const profilesQuery = client.from("scouter_profiles").select("account_id,account_login,pat_ciphertext").not("pat_ciphertext", "is", null).limit(1000);
   const [{ data: profiles, error: profilesError }, { data: states, error: statesError }] = await Promise.all([
@@ -76,20 +77,22 @@ export async function syncRecentScouterWorkBatch({ concurrency = 3, login }: { c
   for (let index = 0; index < candidates.length; index += batchSize) {
     const outcomes = await Promise.all(candidates.slice(index, index + batchSize).map(async (profile) => {
       try {
-        const outcome = await syncRecentScouterWork(profile, checkpoints.get(Number(profile.account_id)) ?? null);
+        const outcome = await syncRecentScouterWork(profile, checkpoints.get(Number(profile.account_id)) ?? null, month);
         return { ...outcome, failed: false, error: undefined };
       } catch (error) {
         const message = describeSyncError(error);
         console.error("[github:recent-scouter-sync:failed]", { accountId: profile.account_id, error });
-        const { error: stateError } = await client.from("scouter_issue_sync_state").upsert({
-          account_id: profile.account_id,
-          account_login: profile.account_login,
-          coverage: "all_visible_repositories",
-          recent_status: "failed",
-          recent_last_error: message.slice(0, 500),
-          updated_at: new Date().toISOString(),
-        }, { onConflict: "account_id" });
-        if (stateError) console.error("[github:recent-scouter-sync:state-failed]", { accountId: profile.account_id, error: stateError });
+        if (!month) {
+          const { error: stateError } = await client.from("scouter_issue_sync_state").upsert({
+            account_id: profile.account_id,
+            account_login: profile.account_login,
+            coverage: "all_visible_repositories",
+            recent_status: "failed",
+            recent_last_error: message.slice(0, 500),
+            updated_at: new Date().toISOString(),
+          }, { onConflict: "account_id" });
+          if (stateError) console.error("[github:recent-scouter-sync:state-failed]", { accountId: profile.account_id, error: stateError });
+        }
         return { pagesChecked: 0, issuesChecked: 0, pullRequestsChecked: 0, linksChecked: 0, complete: false, failed: true, error: `@${profile.account_login}: ${message}` };
       }
     }));
@@ -107,7 +110,7 @@ export async function syncRecentScouterWorkBatch({ concurrency = 3, login }: { c
   return result;
 }
 
-async function syncRecentScouterWork(profile: ScouterTokenRow, lastCompletedAt: string | null) {
+async function syncRecentScouterWork(profile: ScouterTokenRow, lastCompletedAt: string | null, month?: string) {
   const startedAt = new Date();
   const previous = lastCompletedAt ? Date.parse(lastCompletedAt) : NaN;
   const since = new Date(Number.isFinite(previous)
@@ -120,45 +123,50 @@ async function syncRecentScouterWork(profile: ScouterTokenRow, lastCompletedAt: 
   }
   const repositoryCache = new Map<string, GitHubRepository>();
   const result = { pagesChecked: 0, issuesChecked: 0, pullRequestsChecked: 0, linksChecked: 0, complete: false };
-  for (let page = 1; ; page++) {
-    const response = await fetchAssignedIssuesPage({ token: pat, login: tokenOwner.login, page, updatedSince: since, repositoryCache });
-    const relationships = await fetchAssignedIssueRelationships({ token: pat, issues: response.issues });
-    await storeRecentAssignedIssuePage(profile, response.issues);
-    await storePullRequestsAndLinks({
-      pullRequests: relationships.pullRequests,
-      links: relationships.links,
-      replaceIssueIds: response.issues.flatMap((issue) => issue.id ? [issue.id] : []),
-    });
-    result.pagesChecked++;
-    result.issuesChecked += response.issues.length;
-    result.pullRequestsChecked += relationships.pullRequests.length;
-    result.linksChecked += relationships.links.length;
-    if (!response.hasNextPage) break;
+  // A monthly scan is partial coverage: never retire absent assignments or advance global checkpoints.
+  for (const dateFilter of month ? [monthSearch(month, "created"), monthSearch(month, "closed")] : [undefined]) {
+    for (let page = 1; ; page++) {
+      const response = await fetchAssignedIssuesPage({ token: pat, login: tokenOwner.login, page, updatedSince: month ? undefined : since, dateFilter, repositoryCache });
+      const relationships = await fetchAssignedIssueRelationships({ token: pat, issues: response.issues });
+      await storeRecentAssignedIssuePage(profile, response.issues);
+      await storePullRequestsAndLinks({
+        pullRequests: relationships.pullRequests,
+        links: relationships.links,
+        replaceIssueIds: response.issues.flatMap((issue) => issue.id ? [issue.id] : []),
+      });
+      result.pagesChecked++;
+      result.issuesChecked += response.issues.length;
+      result.pullRequestsChecked += relationships.pullRequests.length;
+      result.linksChecked += relationships.links.length;
+      if (!response.hasNextPage) break;
+    }
+    for (let page = 1; ; page++) {
+      const response = await fetchAuthoredPullRequestsPage({ token: pat, login: tokenOwner.login, page, updatedSince: month ? undefined : since, dateFilter });
+      await storeDiscoveredIssues(response.issues);
+      await storePullRequestsAndLinks({
+        pullRequests: response.pullRequests,
+        links: response.links,
+        replacePullRequestIds: response.pullRequests.map((pullRequest) => pullRequest.id),
+      });
+      result.pagesChecked++;
+      result.issuesChecked += response.issues.length;
+      result.pullRequestsChecked += response.pullRequests.length;
+      result.linksChecked += response.links.length;
+      if (!response.hasNextPage) break;
+    }
   }
-  for (let page = 1; ; page++) {
-    const response = await fetchAuthoredPullRequestsPage({ token: pat, login: tokenOwner.login, page, updatedSince: since });
-    await storeDiscoveredIssues(response.issues);
-    await storePullRequestsAndLinks({
-      pullRequests: response.pullRequests,
-      links: response.links,
-      replacePullRequestIds: response.pullRequests.map((pullRequest) => pullRequest.id),
-    });
-    result.pagesChecked++;
-    result.issuesChecked += response.issues.length;
-    result.pullRequestsChecked += response.pullRequests.length;
-    result.linksChecked += response.links.length;
-    if (!response.hasNextPage) break;
+  if (!month) {
+    const { error } = await serviceClient().from("scouter_issue_sync_state").upsert({
+      account_id: profile.account_id,
+      account_login: profile.account_login,
+      coverage: "all_visible_repositories",
+      recent_status: "complete",
+      recent_last_completed_at: startedAt.toISOString(),
+      recent_last_error: null,
+      updated_at: new Date().toISOString(),
+    }, { onConflict: "account_id" });
+    if (error) throw error;
   }
-  const { error } = await serviceClient().from("scouter_issue_sync_state").upsert({
-    account_id: profile.account_id,
-    account_login: profile.account_login,
-    coverage: "all_visible_repositories",
-    recent_status: "complete",
-    recent_last_completed_at: startedAt.toISOString(),
-    recent_last_error: null,
-    updated_at: new Date().toISOString(),
-  }, { onConflict: "account_id" });
-  if (error) throw error;
   result.complete = true;
   return result;
 }

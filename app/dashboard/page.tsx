@@ -1,3 +1,4 @@
+import { resolveActivityMonth } from "../../lib/activity-month";
 import type { Metadata } from "next";
 import { getDashboardData } from "../../lib/dashboard/data";
 import { createAuthClient } from "../../lib/supabase/auth-client";
@@ -15,16 +16,18 @@ export const metadata: Metadata = {
   },
 };
 
-export default async function Dashboard() {
+export default async function Dashboard({ searchParams }: { searchParams: Promise<{ month?: string | string[] }> }) {
   const supabase = await createAuthClient();
   if (!supabase) redirect("/login");
 
   const { data: auth } = await supabase.auth.getUser();
   if (!isAdmin(auth.user)) redirect("/login");
 
-  const data = await getDashboardData();
+  const month = resolveActivityMonth((await searchParams).month);
+  const data = await getDashboardData(month);
   return (
     <DashboardWorkspace
+      month={month}
       repositories={data.repositories.data}
       issues={data.openIssues.data}
       closedIssues={data.closedIssues.data}

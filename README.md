@@ -131,25 +131,38 @@ users do not need to give Plinger a personal access token for monitoring.
 The scouter portal separately accepts a PAT for Scouter work discovery and approved admin CLI work.
 
 Issue and PR webhooks reconcile GitHub's closing-keyword and manually linked
-relationships. The dashboard shows recent closed issues and merge states only
-for linked PRs. An unknown merge state is shown as "Checking," not "Ready."
-The admin-only **Sync recent GitHub work** button checks recent assigned issues
-and authored PRs for every Scouter with a PAT, plus up to 20 linked open PRs.
-The scheduled full mode also checks recent issues in up to 10 connected
-repositories and advances the historical Scouter scan. Issue and PR webhooks
-keep App-connected records current, and base-branch pushes recheck linked open
-PRs. CI-only and review changes may not produce those webhooks; use the button
-to check their latest status.
+relationships. Pull requests are listed independently of those links. An unknown
+merge state is shown as "Checking," not "Ready."
+
+## Monthly Waves
+
+The dashboard defaults to the current UTC month. **Wave month** selects any
+month, **Current month** resets the selection, and **All time** shows synced
+history. The month stays in the dashboard URL so selections can be bookmarked.
+Open issues and open PRs use their creation date; closed issues and unmerged
+closed PRs use their closure date; merged PRs use their merge date. Activity uses
+the webhook receipt date. Older work finished in the selected month is included.
+These lists show current GitHub states, not a snapshot of state at month end.
+Repository connections, the Scouter directory, and earnings keep their own scope.
+
+**Sync selected month** searches assigned issues and authored PRs for every
+Scouter with a saved PAT using both creation and closure windows, and imports
+their GitHub relationships. Related records can be imported outside the month
+so links stay intact; list entries follow the selected period. Monthly scans
+never advance full-history checkpoints or retire absent assignments. Choosing
+**All time** exposes **Sync all history**, which also advances the bounded
+historical scan and checks App-connected repositories and linked open PRs.
 
 ## Automatic Sync
 
 The GitHub Actions workflow in `.github/workflows/sync-github.yml` calls the
-same protected sync endpoint. It polls recent work for every Scouter and a
-rotating batch of 20 linked PRs four times an hour. A separate run every two
-hours advances the bounded historical scan. Webhooks update installed repositories immediately,
-and **Sync recent GitHub work** runs an on-demand check. Scheduled runs may be delayed or missed
-by GitHub Actions, so this is periodic reconciliation rather than a guarantee
-of exact 15-minute freshness.
+same protected sync endpoint four times an hour and every two hours. Routine
+runs reconcile the current UTC month. In **Run workflow**, set `month` to
+`YYYY-MM` to recover a past wave, or `all` with `mode: full` to advance history.
+The optional `scouter` input restricts recovery to one GitHub login.
+Webhooks continue updating installed repositories immediately. Scheduled runs
+may be delayed or missed by GitHub Actions, so this is periodic reconciliation
+rather than a guarantee of exact 15-minute freshness.
 
 Generate a dedicated secret:
 

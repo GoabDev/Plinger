@@ -1,3 +1,4 @@
+import { currentMonth, monthQuery, monthBounds, inActivityMonth } from "../activity-month";
 import { selectAllSupabaseRows, selectSupabaseRows } from "../supabase/server";
 import { getScouterDirectory } from "./scouters";
 
@@ -40,6 +41,8 @@ export type PullRequestRow = {
   base_ref: string | null;
   merged: boolean;
   merged_at: string | null;
+  opened_at?: string | null;
+  closed_at?: string | null;
   mergeable_state: string | null;
   mergeable: boolean | null;
   updated_at: string;
@@ -69,14 +72,7 @@ export type InstallationRow = {
   updated_at: string;
 };
 
-export async function getDashboardData() {
-  const linksPromise = selectAllSupabaseRows<IssuePullRequestRow>({
-    table: "issue_pull_requests",
-    query: {
-      select: "github_issue_id,github_pull_request_id",
-      order: "updated_at.desc,github_issue_id.asc,github_pull_request_id.asc",
-    },
-  });
+export async function getDashboardData(month = currentMonth()) {
   const repositoriesPromise = selectSupabaseRows<RepositoryRow>({
     table: "repositories",
     query: {
@@ -92,6 +88,7 @@ export async function getDashboardData() {
       select:
         "id,github_issue_id,github_issue_number,title,state,url,assignee_logins,labels,opened_at,closed_at,updated_at",
       state: "eq.open",
+      ...monthQuery(month, "opened_at"),
       order: "updated_at.desc,github_issue_id.asc",
     },
   });
@@ -100,6 +97,7 @@ export async function getDashboardData() {
     query: {
       select: "id,github_issue_id,github_issue_number,title,state,url,assignee_logins,labels,opened_at,closed_at,updated_at",
       state: "eq.closed",
+      ...monthQuery(month, "closed_at"),
       order: "closed_at.desc.nullslast,github_issue_id.asc",
     },
   });
@@ -108,6 +106,7 @@ export async function getDashboardData() {
     query: {
       select:
         "id,delivery_id,event,action,repository_full_name,sender_login,received_at",
+      ...monthQuery(month, "received_at"),
       order: "received_at.desc",
       limit: "8",
     },
@@ -125,10 +124,29 @@ export async function getDashboardData() {
   const pullRequestsPromise = selectAllSupabaseRows<PullRequestRow>({
     table: "pull_requests",
     query: {
-      select: "id,github_pull_request_id,github_pull_request_number,title,state,url,author_login,head_ref,base_ref,merged,merged_at,mergeable,mergeable_state,updated_at",
+      select: "id,github_pull_request_id,github_pull_request_number,title,state,url,author_login,head_ref,base_ref,merged,merged_at,opened_at,closed_at,mergeable,mergeable_state,updated_at",
+      ...(month === "all" ? {} : { or: ["opened_at", "closed_at", "merged_at"].map((column) => {
+        const { start, end } = monthBounds(month);
+        return `and(${column}.gte.${start},${column}.lt.${end})`;
+      }).join(",").replace(/^(.+)$/, "($1)") }),
       order: "updated_at.desc,github_pull_request_id.asc",
     },
   });
+  const linksPromise = month === "all"
+    ? loadWorkLinks()
+    : Promise.all([openIssuesPromise, closedIssuesPromise, pullRequestsPromise]).then(async ([open, closed, prs]) => {
+      const filters = [
+        ...new Set([...open.data, ...closed.data].map((issue) => `github_issue_id.eq.${issue.github_issue_id}`)),
+        ...new Set(prs.data.map((pr) => `github_pull_request_id.eq.${pr.github_pull_request_id}`)),
+      ];
+      const links = new Map<string, IssuePullRequestRow>();
+      for (let offset = 0; offset < filters.length; offset += 100) {
+        const result = await loadWorkLinks({ or: `(${filters.slice(offset, offset + 100).join(",")})` });
+        if (result.error || result.skipped) return { ...result, data: [] };
+        for (const link of result.data) links.set(`${link.github_issue_id}:${link.github_pull_request_id}`, link);
+      }
+      return { data: [...links.values()], error: undefined, skipped: Boolean(open.skipped || closed.skipped || prs.skipped) };
+    });
   const [
     repositories,
     openIssues,
@@ -150,11 +168,11 @@ export async function getDashboardData() {
   ]);
   const openPullRequests = {
     ...pullRequests,
-    data: pullRequests.data.filter((pr) => !pr.merged),
+    data: pullRequests.data.filter((pr) => !pr.merged && inActivityMonth(pr.state === "closed" ? pr.closed_at : pr.opened_at, month)),
   };
   const mergedPullRequests = {
     ...pullRequests,
-    data: pullRequests.data.filter((pr) => pr.merged),
+    data: pullRequests.data.filter((pr) => pr.merged && inActivityMonth(pr.merged_at, month)),
   };
 
   return {
@@ -187,4 +205,15 @@ export async function getDashboardData() {
       links.error,
     ].filter((error): error is string => Boolean(error)),
   };
+}
+
+function loadWorkLinks(query: Record<string, string> = {}) {
+  return selectAllSupabaseRows<IssuePullRequestRow>({
+    table: "issue_pull_requests",
+    query: {
+      select: "github_issue_id,github_pull_request_id",
+      order: "updated_at.desc,github_issue_id.asc,github_pull_request_id.asc",
+      ...query,
+    },
+  });
 }

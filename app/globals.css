@@ -2703,3 +2703,26 @@ ul {
 .dark .ui-input:focus-visible { @apply border-[var(--purple)] ring-2 ring-[#80628d]/30; }
 .dark .ui-input[aria-invalid="true"],
 .dark .login-form input[aria-invalid="true"] { @apply border-[#e18c83]; }
+
+.activity-period {
+  margin-bottom: 16px;
+}
+.activity-period label {
+  font-size: 13px;
+  font-weight: 600;
+}
+.activity-period input {
+  min-height: 36px;
+  padding: 6px 10px;
+  border: 1px solid var(--border, #e2e2e7);
+  border-radius: 6px;
+  background: var(--surface, #fff);
+  color: inherit;
+  font: inherit;
+  color-scheme: light;
+}
+.dark .activity-period input {
+  background: #201d22;
+  border-color: #443d47;
+  color-scheme: dark;
+}
