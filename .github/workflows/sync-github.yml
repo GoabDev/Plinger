@@ -27,7 +27,7 @@ on:
 permissions: {}
 
 concurrency:
-  group: plinger-github-sync
+  group: plinger-github-sync-${{ inputs.scouter || 'all' }}
   cancel-in-progress: false
 
 jobs:

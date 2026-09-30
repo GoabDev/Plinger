@@ -2711,18 +2711,27 @@ ul {
   font-size: 13px;
   font-weight: 600;
 }
-.activity-period input {
-  min-height: 36px;
-  padding: 6px 10px;
-  border: 1px solid var(--border, #e2e2e7);
-  border-radius: 6px;
-  background: var(--surface, #fff);
-  color: inherit;
-  font: inherit;
-  color-scheme: light;
+@theme inline {
+  --color-background: var(--canvas);
+  --color-foreground: var(--ink);
+  --color-popover: var(--picker-surface);
+  --color-popover-foreground: var(--ink);
+  --color-primary: var(--purple);
+  --color-primary-foreground: #fff;
+  --color-accent: var(--picker-accent);
+  --color-accent-foreground: var(--ink);
+  --color-secondary: var(--picker-accent);
+  --color-secondary-foreground: var(--ink);
+  --color-muted-foreground: var(--muted);
+  --color-input: var(--line);
+  --color-ring: var(--purple);
 }
-.dark .activity-period input {
-  background: #201d22;
-  border-color: #443d47;
-  color-scheme: dark;
+:root { --picker-surface: #fff; --picker-accent: #f0edf7; }
+.dark { --picker-surface: #211e24; --picker-accent: #362e3d; }
+.month-picker-footer {
+  display: grid;
+  gap: 10px;
+  padding: 0 12px 12px;
+  font-size: 12px;
+  color: var(--muted);
 }

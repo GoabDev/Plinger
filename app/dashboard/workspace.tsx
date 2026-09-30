@@ -46,6 +46,7 @@ import type { ScouterRow } from "../../lib/dashboard/scouters";
 import ScoutersView from "./scouters-view";
 import EarningsView from "./earnings-view";
 import { Brand } from "../ui/brand";
+import { MonthPicker } from "../ui/month-picker";
 import { ThemeToggle } from "../ui/theme-toggle";
 import { signOut } from "../login/actions";
 import {
@@ -74,6 +75,8 @@ type Props = {
   pullRequests: PullRequestRow[];
   merged: PullRequestRow[];
   links: IssuePullRequestRow[];
+  relatedIssues: IssueRow[];
+  relatedPullRequests: PullRequestRow[];
   events: WebhookEventRow[];
   scouters: ScouterRow[];
   scouterCount: number;
@@ -115,6 +118,8 @@ export default function DashboardWorkspace({
   pullRequests,
   merged,
   links,
+  relatedIssues,
+  relatedPullRequests,
   events,
   scouters,
   scouterCount,
@@ -196,8 +201,8 @@ export default function DashboardWorkspace({
   const filteredClosedIssues = closedIssues.filter((issue) =>
     match(issue.title, String(issue.github_issue_number), ...issue.assignee_logins, ...issue.labels),
   );
-  const issueById = new Map([...issues, ...closedIssues].map((issue) => [String(issue.github_issue_id), issue]));
-  const prById = new Map([...pullRequests, ...merged].map((pr) => [String(pr.github_pull_request_id), pr]));
+  const issueById = new Map([...relatedIssues, ...issues, ...closedIssues].map((issue) => [String(issue.github_issue_id), issue]));
+  const prById = new Map([...relatedPullRequests, ...pullRequests, ...merged].map((pr) => [String(pr.github_pull_request_id), pr]));
   const prsByIssue = new Map<string, PullRequestRow[]>();
   const issuesByPr = new Map<string, IssueRow[]>();
   for (const link of links) {
@@ -400,9 +405,8 @@ export default function DashboardWorkspace({
           {view !== "scouters" && view !== "earnings" && (
             <div className="filter-bar activity-period" aria-label="Activity period">
               <label htmlFor="activity-month">Wave month (UTC)</label>
-              <input id="activity-month" type="month" min="1900-01" max="2199-12"
-                value={month === "all" ? "" : month} disabled={pending || syncMutation.isPending}
-                onChange={(event) => { if (event.target.value) startTransition(() => router.push(`/dashboard?month=${event.target.value}`, { scroll: false })); }} />
+              <MonthPicker value={month} disabled={pending || syncMutation.isPending}
+                onValueChange={(value) => startTransition(() => router.push(`/dashboard?month=${value}`, { scroll: false }))} />
               <button className="button button-white" disabled={pending || syncMutation.isPending}
                 onClick={() => startTransition(() => router.push(`/dashboard?month=${currentMonth()}`, { scroll: false }))}>Current month</button>
               <button className="button button-white" disabled={pending || syncMutation.isPending} aria-pressed={month === "all"}

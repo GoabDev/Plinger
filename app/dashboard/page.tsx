@@ -34,6 +34,8 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
       pullRequests={data.openPullRequests.data}
       merged={data.mergedPullRequests.data}
       links={data.links.data}
+      relatedIssues={data.relatedIssues.data}
+      relatedPullRequests={data.relatedPullRequests.data}
       events={data.recentEvents.data}
       scouters={data.scouters.data}
       scouterCount={data.scouters.count ?? data.scouters.data.length}

@@ -137,7 +137,7 @@ merge state is shown as "Checking," not "Ready."
 ## Monthly Waves
 
 The dashboard defaults to the current UTC month. **Wave month** selects any
-month, **Current month** resets the selection, and **All time** shows synced
+month using the shadcn Calendar/Popover picker, **Current month** resets the selection, and **All time** shows synced
 history. The month stays in the dashboard URL so selections can be bookmarked.
 Open issues and open PRs use their creation date; closed issues and unmerged
 closed PRs use their closure date; merged PRs use their merge date. Activity uses
@@ -159,7 +159,9 @@ The GitHub Actions workflow in `.github/workflows/sync-github.yml` calls the
 same protected sync endpoint four times an hour and every two hours. Routine
 runs reconcile the current UTC month. In **Run workflow**, set `month` to
 `YYYY-MM` to recover a past wave, or `all` with `mode: full` to advance history.
-The optional `scouter` input restricts recovery to one GitHub login.
+The optional `scouter` input restricts recovery to one GitHub login. Targeted
+recovery jobs use separate concurrency groups so a newer Scouter request does
+not cancel another account's pending recovery.
 Webhooks continue updating installed repositories immediately. Scheduled runs
 may be delayed or missed by GitHub Actions, so this is periodic reconciliation
 rather than a guarantee of exact 15-minute freshness.

@@ -11,6 +11,31 @@ afterEach(() => {
 });
 
 describe("dashboard work coverage", () => {
+  it("retains older linked PRs as issue context without adding them to the month's PR list", async () => {
+    vi.stubEnv("SUPABASE_URL", "https://database.example");
+    vi.stubEnv("SUPABASE_SECRET_KEY", "test-key");
+    vi.stubGlobal("fetch", vi.fn(async (input: URL | RequestInfo) => {
+      const url = new URL(String(input));
+      const table = url.pathname.split("/").at(-1);
+      let rows: unknown[] = [];
+      if (table === "issues" && url.searchParams.get("state") === "eq.open") rows = [{ github_issue_id: 1 }];
+      if (table === "issue_pull_requests") {
+        expect(url.searchParams.get("or")).toBe("(github_issue_id.eq.1)");
+        rows = [{ github_issue_id: 1, github_pull_request_id: 9 }];
+      }
+      if (table === "pull_requests" && url.searchParams.has("github_pull_request_id")) {
+        expect(url.searchParams.get("github_pull_request_id")).toBe("in.(9)");
+        expect(url.searchParams.has("or")).toBe(false);
+        rows = [{ github_pull_request_id: 9, opened_at: "2026-08-01T00:00:00Z", state: "open", merged: false }];
+      }
+      return new Response(JSON.stringify(rows), { headers: { "content-range": `*/${rows.length}` } });
+    }));
+    const result = await getDashboardData("2026-09");
+    expect(result.openPullRequests.data).toEqual([]);
+    expect(result.relatedPullRequests.data.map((pr) => pr.github_pull_request_id)).toEqual([9]);
+    expect(result.links.data).toEqual([{ github_issue_id: 1, github_pull_request_id: 9 }]);
+  });
+
   it("filters by creation, closure and merge dates instead of the latest update date", async () => {
     vi.stubEnv("SUPABASE_URL", "https://database.example");
     vi.stubEnv("SUPABASE_SECRET_KEY", "test-key");

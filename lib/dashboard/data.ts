@@ -166,6 +166,18 @@ export async function getDashboardData(month = currentMonth()) {
     scoutersPromise,
     linksPromise,
   ]);
+  // Related work is context, not an entry in the selected month's lists.
+  // Keeping it separate prevents the period filter from hiding genuine GitHub links.
+  const issueIds = new Set([...openIssues.data, ...closedIssues.data].map((issue) => issue.github_issue_id));
+  const prIds = new Set(pullRequests.data
+    .filter((pr) => inActivityMonth(pr.merged ? pr.merged_at : pr.state === "closed" ? pr.closed_at : pr.opened_at, month))
+    .map((pr) => pr.github_pull_request_id));
+  const [relatedIssues, relatedPullRequests] = await Promise.all([
+    loadRelatedRows<IssueRow>("issues", "github_issue_id", links.data.map((link) => link.github_issue_id).filter((id) => !issueIds.has(id)),
+      "id,github_issue_id,github_issue_number,title,state,url,assignee_logins,labels,opened_at,closed_at,updated_at"),
+    loadRelatedRows<PullRequestRow>("pull_requests", "github_pull_request_id", links.data.map((link) => link.github_pull_request_id).filter((id) => !prIds.has(id)),
+      "id,github_pull_request_id,github_pull_request_number,title,state,url,author_login,head_ref,base_ref,merged,merged_at,opened_at,closed_at,mergeable,mergeable_state,updated_at"),
+  ]);
   const openPullRequests = {
     ...pullRequests,
     data: pullRequests.data.filter((pr) => !pr.merged && inActivityMonth(pr.state === "closed" ? pr.closed_at : pr.opened_at, month)),
@@ -182,6 +194,8 @@ export async function getDashboardData(month = currentMonth()) {
     openPullRequests,
     mergedPullRequests,
     links,
+    relatedIssues,
+    relatedPullRequests,
     recentEvents,
     installations,
     scouters,
@@ -203,8 +217,24 @@ export async function getDashboardData(month = currentMonth()) {
       recentEvents.error,
       installations.error,
       links.error,
+      relatedIssues.error,
+      relatedPullRequests.error,
     ].filter((error): error is string => Boolean(error)),
   };
+}
+
+async function loadRelatedRows<T>(table: string, column: string, ids: number[], select: string) {
+  const uniqueIds = [...new Set(ids)];
+  const data: T[] = [];
+  for (let offset = 0; offset < uniqueIds.length; offset += 100) {
+    const result = await selectAllSupabaseRows<T>({
+      table,
+      query: { select, [column]: `in.(${uniqueIds.slice(offset, offset + 100).join(",")})`, order: `${column}.asc` },
+    });
+    if (result.error || result.skipped) return { ...result, data: [] };
+    data.push(...result.data);
+  }
+  return { data, error: undefined, skipped: false };
 }
 
 function loadWorkLinks(query: Record<string, string> = {}) {
