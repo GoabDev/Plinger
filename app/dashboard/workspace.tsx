@@ -141,7 +141,7 @@ export default function DashboardWorkspace({
     onSuccess: (result) => {
       const assignmentFailures = result.assignmentSync?.failed ?? 0;
       setSyncFailed(Boolean(result.failed || assignmentFailures));
-      setSyncMessage(
+      const summary =
         result.failed
           ? `Checked ${result.checked} records; ${result.failed} could not be checked.`
           : assignmentFailures
@@ -150,8 +150,8 @@ export default function DashboardWorkspace({
               ? `Checked ${result.checked} GitHub records, ${result.assignmentSync.issuesChecked} recent issues, ${result.assignmentSync.pullRequestsChecked} pull requests, and ${result.assignmentSync.linksChecked} links.`
           : result.skipped
             ? `Checked ${result.checked} records; ${result.skipped} unavailable repositories were disabled.`
-            : `Checked ${result.checked} recent issues and linked pull requests.`,
-      );
+            : `Checked ${result.checked} recent issues and linked pull requests.`;
+      setSyncMessage(result.errors?.length ? `${summary} ${result.errors[0]}` : summary);
       startTransition(() => router.refresh());
     },
     onError: (error) => {
@@ -442,7 +442,7 @@ export default function DashboardWorkspace({
                 onClick={() => navigate("issues")}
               />
               <Metric
-                label="Linked pull requests"
+                label="Pull requests"
                 value={failed ? null : pullRequests.length}
                 icon={GitPullRequest}
                 tone="blue"
@@ -1079,7 +1079,7 @@ function PullRequestList({
         detail={
           merged
             ? "Completed merges will appear as your team ships work."
-            : "Linked pull requests will appear here."
+            : "Synced pull requests will appear here."
         }
         filtered={filtered}
       />

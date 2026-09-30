@@ -27,6 +27,8 @@ describe("dashboard work coverage", () => {
       merged: i % 3 === 0,
       updated_at: new Date(Date.UTC(2026, 0, 1, 0, i)).toISOString(),
     }));
+    // PR #1427 must remain visible before its issue link has been imported.
+    prs.push({ github_pull_request_id: 4690293495, state: "open", merged: false, updated_at: "2026-09-30T12:13:07Z" });
     const fetchMock = vi.fn(async (input: URL | RequestInfo) => {
       const url = new URL(String(input));
       const table = url.pathname.split("/").at(-1);
@@ -34,10 +36,8 @@ describe("dashboard work coverage", () => {
       if (table === "issues") rows = url.searchParams.get("state") === "eq.open" ? issues : closed;
       if (table === "issue_pull_requests") rows = links;
       if (table === "pull_requests") {
-        const filter = url.searchParams.get("github_pull_request_id")!;
-        const ids = filter.slice(4, -1).split(",").map(Number);
-        expect(ids.length).toBeLessThanOrEqual(100);
-        rows = prs.filter((pr) => ids.includes(pr.github_pull_request_id));
+        expect(url.searchParams.has("github_pull_request_id")).toBe(false);
+        rows = prs;
       }
       const offset = Number(url.searchParams.get("offset") ?? 0);
       // A server may return fewer rows than requested; this must not end pagination.
@@ -53,9 +53,33 @@ describe("dashboard work coverage", () => {
     expect(result.openIssues.data).toHaveLength(1205);
     expect(result.closedIssues.data).toHaveLength(25);
     expect(result.links.data).toHaveLength(241);
-    expect(result.openPullRequests.data.length + result.mergedPullRequests.data.length).toBe(241);
+    expect(result.openPullRequests.data.length + result.mergedPullRequests.data.length).toBe(242);
+    expect(result.openPullRequests.data.some((pr) => pr.github_pull_request_id === 4690293495)).toBe(true);
     expect(result.mergedPullRequests.data.some((pr) => pr.github_pull_request_id === 3240)).toBe(true);
     expect(result.errors).toEqual([]);
+  });
+
+  it("keeps PRs visible when issue links are empty or unavailable", async () => {
+    vi.stubEnv("SUPABASE_URL", "https://database.example");
+    vi.stubEnv("SUPABASE_SECRET_KEY", "test-key");
+    const prs = [
+      { github_pull_request_id: 4690293495, state: "open", merged: false },
+      { github_pull_request_id: 2, state: "closed", merged: true },
+      { github_pull_request_id: 3, state: "closed", merged: false },
+    ];
+    for (const linksFail of [false, true]) {
+      vi.stubGlobal("fetch", vi.fn(async (input: URL | RequestInfo) => {
+        const table = new URL(String(input)).pathname.split("/").at(-1);
+        if (table === "issue_pull_requests" && linksFail) return new Response("Links unavailable", { status: 503 });
+        const rows = table === "pull_requests" ? prs : [];
+        return new Response(JSON.stringify(rows), { headers: { "content-range": `*/${rows.length}` } });
+      }));
+      const result = await getDashboardData();
+      expect(result.openPullRequests.data.map((pr) => pr.github_pull_request_id)).toEqual([4690293495, 3]);
+      expect(result.mergedPullRequests.data.map((pr) => pr.github_pull_request_id)).toEqual([2]);
+      expect(result.links.data).toEqual([]);
+      expect(result.errors).toEqual(linksFail ? ["Links unavailable"] : []);
+    }
   });
 
   it("reports a later-page failure instead of showing a partial list as complete", async () => {

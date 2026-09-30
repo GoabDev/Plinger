@@ -3,6 +3,7 @@ import "server-only";
 import { randomUUID } from "node:crypto";
 import { decryptPat, serviceClient } from "../scouter/portal";
 import { getGitHubTokenOwner } from "./api";
+import { describeSyncError } from "./sync-errors";
 import {
   fetchAssignedIssuesPage,
   type GitHubAssignedIssue,
@@ -49,6 +50,7 @@ export type AssignmentSyncResult = {
   linksChecked: number;
   completed: number;
   failed: number;
+  errors?: string[];
 };
 
 const RECENT_OVERLAP_MS = 60 * 60 * 1000;
@@ -65,7 +67,7 @@ export async function syncRecentScouterWorkBatch({ concurrency = 3 }: { concurre
   const checkpoints = new Map((states ?? []).map((state) => [Number(state.account_id), state.recent_last_completed_at as string | null]));
   const result: AssignmentSyncResult = {
     scoutersChecked: 0, pagesChecked: 0, issuesChecked: 0, pullRequestsChecked: 0,
-    linksChecked: 0, completed: 0, failed: 0,
+    linksChecked: 0, completed: 0, failed: 0, errors: [],
   };
   const batchSize = Math.max(1, Math.min(5, Math.floor(concurrency)));
   const candidates = (profiles ?? []) as ScouterTokenRow[];
@@ -73,9 +75,9 @@ export async function syncRecentScouterWorkBatch({ concurrency = 3 }: { concurre
     const outcomes = await Promise.all(candidates.slice(index, index + batchSize).map(async (profile) => {
       try {
         const outcome = await syncRecentScouterWork(profile, checkpoints.get(Number(profile.account_id)) ?? null);
-        return { ...outcome, failed: false };
+        return { ...outcome, failed: false, error: undefined };
       } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
+        const message = describeSyncError(error);
         console.error("[github:recent-scouter-sync:failed]", { accountId: profile.account_id, error });
         const { error: stateError } = await client.from("scouter_issue_sync_state").upsert({
           account_id: profile.account_id,
@@ -86,7 +88,7 @@ export async function syncRecentScouterWorkBatch({ concurrency = 3 }: { concurre
           updated_at: new Date().toISOString(),
         }, { onConflict: "account_id" });
         if (stateError) console.error("[github:recent-scouter-sync:state-failed]", { accountId: profile.account_id, error: stateError });
-        return { pagesChecked: 0, issuesChecked: 0, pullRequestsChecked: 0, linksChecked: 0, complete: false, failed: true };
+        return { pagesChecked: 0, issuesChecked: 0, pullRequestsChecked: 0, linksChecked: 0, complete: false, failed: true, error: `@${profile.account_login}: ${message}` };
       }
     }));
     for (const outcome of outcomes) {
@@ -97,6 +99,7 @@ export async function syncRecentScouterWorkBatch({ concurrency = 3 }: { concurre
       result.linksChecked += outcome.linksChecked;
       if (outcome.complete) result.completed++;
       if (outcome.failed) result.failed++;
+      if (outcome.error) result.errors!.push(outcome.error);
     }
   }
   return result;
@@ -296,6 +299,7 @@ export async function syncScouterAssignmentsBatch({
     linksChecked: 0,
     completed: 0,
     failed: 0,
+    errors: [],
   };
 
   for (let index = 0; index < selectedCandidates.length; index += batchSize) {
@@ -306,9 +310,9 @@ export async function syncScouterAssignmentsBatch({
           stateByAccount.get(Number(profile.account_id)) ?? null,
           maxPagesPerScouter,
         );
-        return { ...outcome, failed: false };
+        return { ...outcome, failed: false, error: undefined };
       } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
+        const message = describeSyncError(error);
         const phase = error instanceof ScouterWorkSyncError ? error.phase : "issues";
         console.error("[github:assignment-sync:failed]", { accountId: profile.account_id, error });
         await client.from("scouter_issue_sync_state").upsert({
@@ -330,6 +334,7 @@ export async function syncScouterAssignmentsBatch({
           linksChecked: 0,
           complete: false,
           failed: true,
+          error: `@${profile.account_login}: ${message}`,
         };
       }
     }));
@@ -342,6 +347,7 @@ export async function syncScouterAssignmentsBatch({
       result.linksChecked += outcome.linksChecked;
       if (outcome.complete) result.completed++;
       if (outcome.failed) result.failed++;
+      if (outcome.error) result.errors!.push(outcome.error);
     }
   }
 

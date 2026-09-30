@@ -6,6 +6,7 @@ export const githubSyncResultSchema = z.object({
   failed: z.number().int().nonnegative(),
   skipped: z.number().int().nonnegative(),
   mode: z.enum(["poll", "full"]),
+  errors: z.array(z.string()).optional(),
   assignmentSync: z.object({
     scoutersChecked: z.number().int().nonnegative(),
     pagesChecked: z.number().int().nonnegative(),

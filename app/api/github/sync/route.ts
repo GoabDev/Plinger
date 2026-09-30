@@ -6,6 +6,7 @@ import { isAdmin } from "../../../../lib/supabase/auth-config";
 import { createHash, timingSafeEqual } from "node:crypto";
 import { githubSyncRequestSchema } from "../../../../lib/github/contracts";
 import { syncRecentScouterWorkBatch, syncScouterAssignmentsBatch } from "../../../../lib/github/assignment-sync";
+import { describeSyncError } from "../../../../lib/github/sync-errors";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -61,6 +62,7 @@ export async function POST(request: Request) {
       linksChecked: 0,
       completed: 0,
       failed: 1,
+      errors: [`Recent work sync: ${describeSyncError(error)}`],
     };
   });
 
@@ -208,9 +210,14 @@ export async function POST(request: Request) {
     concurrency: 2,
   }).catch((error) => {
     console.error("[github:full-scouter-sync:batch-failed]", error);
-    return { scoutersChecked: 0, pagesChecked: 0, issuesChecked: 0, pullRequestsChecked: 0, linksChecked: 0, completed: 0, failed: 1 };
+    return { scoutersChecked: 0, pagesChecked: 0, issuesChecked: 0, pullRequestsChecked: 0, linksChecked: 0, completed: 0, failed: 1, errors: [`Full work sync: ${describeSyncError(error)}`] };
   }) : undefined;
   const failed = failures.length + assignmentSync.failed + (fullSync?.failed ?? 0);
+  const errors = [
+    ...failures.map((repository) => `Could not sync ${repository}. Check the Vercel runtime logs.`),
+    ...(assignmentSync.errors ?? []),
+    ...(fullSync?.errors ?? []),
+  ];
   return NextResponse.json(
     {
       checked,
@@ -218,6 +225,8 @@ export async function POST(request: Request) {
       skipped: [...new Set(skipped)].length,
       warnings: [...new Set(warnings)],
       mode,
+      errors,
+      ...(failed ? { error: errors[0] ?? "Some GitHub records could not be synced. Check the Vercel runtime logs." } : {}),
       assignmentSync,
       ...(fullSync ? { fullSync } : {}),
     },

@@ -73,6 +73,8 @@ describe("shared validation contracts", () => {
       assignmentSync: { scoutersChecked: 1, pagesChecked: -1, issuesChecked: 0, pullRequestsChecked: 0, linksChecked: 0, completed: 0, failed: 0 },
     }).success).toBe(false);
     expect(githubSyncResultSchema.safeParse({ checked: -1, failed: 0, skipped: 0, mode: "full" }).success).toBe(false);
+    const errors = ["@zazorplayz: Saved GitHub token is invalid or expired."];
+    expect(githubSyncResultSchema.parse({ checked: 1, failed: 1, skipped: 0, mode: "poll", errors }).errors).toEqual(errors);
   });
 });
 

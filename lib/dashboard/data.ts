@@ -122,33 +122,39 @@ export async function getDashboardData() {
     },
   });
   const scoutersPromise = getScouterDirectory(true);
-  const links = await linksPromise;
-  const linkedPrIds = [...new Set(links.data.map((link) => String(link.github_pull_request_id)))];
-  const linkedPullRequestsPromise = getLinkedPullRequests(linkedPrIds);
+  const pullRequestsPromise = selectAllSupabaseRows<PullRequestRow>({
+    table: "pull_requests",
+    query: {
+      select: "id,github_pull_request_id,github_pull_request_number,title,state,url,author_login,head_ref,base_ref,merged,merged_at,mergeable,mergeable_state,updated_at",
+      order: "updated_at.desc,github_pull_request_id.asc",
+    },
+  });
   const [
     repositories,
     openIssues,
     closedIssues,
-    linkedPullRequests,
+    pullRequests,
     recentEvents,
     installations,
     scouters,
+    links,
   ] = await Promise.all([
     repositoriesPromise,
     openIssuesPromise,
     closedIssuesPromise,
-    linkedPullRequestsPromise,
+    pullRequestsPromise,
     recentEventsPromise,
     installationsPromise,
     scoutersPromise,
+    linksPromise,
   ]);
   const openPullRequests = {
-    ...linkedPullRequests,
-    data: linkedPullRequests.data.filter((pr) => !pr.merged),
+    ...pullRequests,
+    data: pullRequests.data.filter((pr) => !pr.merged),
   };
   const mergedPullRequests = {
-    ...linkedPullRequests,
-    data: linkedPullRequests.data.filter((pr) => pr.merged),
+    ...pullRequests,
+    data: pullRequests.data.filter((pr) => pr.merged),
   };
 
   return {
@@ -181,23 +187,4 @@ export async function getDashboardData() {
       links.error,
     ].filter((error): error is string => Boolean(error)),
   };
-}
-
-async function getLinkedPullRequests(ids: string[]) {
-  const data: PullRequestRow[] = [];
-  // Keep each IN filter small enough for a request URL, even with large GitHub IDs.
-  for (let index = 0; index < ids.length; index += 100) {
-    const batch = await selectAllSupabaseRows<PullRequestRow>({
-      table: "pull_requests",
-      query: {
-        select: "id,github_pull_request_id,github_pull_request_number,title,state,url,author_login,head_ref,base_ref,merged,merged_at,mergeable,mergeable_state,updated_at",
-        github_pull_request_id: `in.(${ids.slice(index, index + 100).join(",")})`,
-        order: "updated_at.desc,github_pull_request_id.asc",
-      },
-    });
-    if (batch.error || batch.skipped) return { ...batch, data: [] };
-    data.push(...batch.data);
-  }
-  data.sort((a, b) => b.updated_at.localeCompare(a.updated_at) || a.github_pull_request_id - b.github_pull_request_id);
-  return { data, skipped: false, error: undefined };
 }
