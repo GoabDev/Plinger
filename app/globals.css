@@ -297,6 +297,12 @@ ul {
 .landing-nav-links a:hover {
   color: white;
 }
+.landing-nav .landing-nav-guide { display: none; background: #80628d; border-color: #80628d; color: #fff; }
+.landing-nav .landing-nav-guide:hover { background: #6d507a; border-color: #6d507a; color: #fff; }
+@media (max-width: 700px) {
+  .landing-nav .landing-nav-dashboard { display: none; }
+  .landing-nav .landing-nav-guide { display: inline-flex; }
+}
 .landing-nav .button {
   font-size: 14px;
 }

@@ -30,8 +30,11 @@ export default function Home() {
         </div>
         <div className="flex items-center gap-2.5">
           <ThemeToggle inverted />
-          <Link className="button button-light max-[700px]:hidden" href="/scouter/login">
+          <Link className="button button-light landing-nav-dashboard" href="/scouter/login">
             Open dashboard <ArrowRight size={16} />
+          </Link>
+          <Link className="button button-light landing-nav-guide" href="/docs">
+            Scouter guide <BookOpen size={16} aria-hidden="true" />
           </Link>
         </div>
       </nav>
