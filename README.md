@@ -2,6 +2,10 @@
 
 Plinger is a GitHub App dashboard for repository signals: issue assignments, pull request activity, merged PRs, and merge-state alerts.
 
+## Feature Plans
+
+- [Referral and wave implementation](docs/referral-and-wave-plan.md): qualification rules, Wave 10 dates, signup recovery, payout accounting, verification and rollout. Implemented locally; apply the migration and activate the wave before production use.
+
 ## Local Setup
 
 Install dependencies:
@@ -9,6 +13,14 @@ Install dependencies:
 ```powershell
 npm.cmd install
 ```
+
+Create your local environment file from [.env.example](.env.example), which lists every app setting and explains where it is used:
+
+```powershell
+if (!(Test-Path .env.local)) { Copy-Item .env.example .env.local }
+```
+
+Fill in `.env.local` before using sign-in, GitHub sync or the Scouter portal. The template distinguishes required credentials from optional scheduled-sync and test settings. If `.env.local` already exists, add the missing entries without replacing its saved values, especially the PAT encryption key. Both `.env.local` and `.env` are ignored by Git. Restart the development server after editing them.
 
 Run the app:
 
@@ -134,9 +146,9 @@ Issue and PR webhooks reconcile GitHub's closing-keyword and manually linked
 relationships. Pull requests are listed independently of those links. An unknown
 merge state is shown as "Checking," not "Ready."
 
-## Monthly Waves
+## Activity Months
 
-The dashboard defaults to the current UTC month. **Wave month** selects any
+The dashboard defaults to the current UTC month. **Activity month** selects any
 month using the shadcn Calendar/Popover picker, **Current month** resets the selection, and **All time** shows synced
 history. The month stays in the dashboard URL so selections can be bookmarked.
 Open issues and open PRs use their creation date; closed issues and unmerged
@@ -158,7 +170,7 @@ historical scan and checks App-connected repositories and linked open PRs.
 The GitHub Actions workflow in `.github/workflows/sync-github.yml` calls the
 same protected sync endpoint four times an hour and every two hours. Routine
 runs reconcile the current UTC month. In **Run workflow**, set `month` to
-`YYYY-MM` to recover a past wave, or `all` with `mode: full` to advance history.
+`YYYY-MM` to recover a past activity month, or `all` with `mode: full` to advance history.
 The optional `scouter` input restricts recovery to one GitHub login. Targeted
 recovery jobs use separate concurrency groups so a newer Scouter request does
 not cancel another account's pending recovery.
@@ -263,8 +275,8 @@ server verifies the transaction against Stellar Horizon, accepts only a
 successful USDC payment to Plinger's configured receiving account, and rejects
 transaction or operation IDs that have already been submitted.
 
-Verified submissions remain pending until an admin confirms them. Confirmed
-gross earnings are split 60% to the scouter and 40% to Plinger. Dashboard naira
+Verified submissions require an earning wave and remain pending until an admin confirms them. Confirmed
+gross earnings normally split 60% to the Scouter and 40% to Plinger. A qualified referral changes the referrer's own earnings to 70/30 for that wave only. Dashboard naira
 estimates use the server-fetched USD/NGN market rate from ExchangeRate-API,
 cached for one hour, with ₦1,330.39 per USD as the outage fallback.
 Admins separately mark the scouter share as paid; rejected and pending claims
@@ -272,11 +284,9 @@ do not contribute to confirmed totals. Scouters can only access their own
 earnings through the authenticated `/api/me/scouter` route, while the aggregate
 earnings API requires the configured admin account.
 
-Marking an earning paid snapshots the scouter's USD share, the exact USD/NGN
-rate, the resulting naira amount in kobo, the rate source, and the payment time.
-Historical paid amounts therefore remain fixed when the market rate changes.
-Marking the payout unpaid clears that snapshot so a later payment records a new
-rate and amount.
+Apply `supabase/migrations/20261014133420_referrals_and_waves.sql` before deploying the referral feature. Payment recording now appends ledger entries containing the Scouter's USD amount, split, exact USD/NGN rate, naira amount in kobo, source and time. Historical payments remain fixed when rates or referral eligibility change. Late qualification creates only the remaining top-up obligation. Corrections append reasoned reversals; they never clear a paid snapshot or send/recover money automatically.
+
+The admin **Waves & referrals** view manages dates, activity evidence and qualification. Scouters use **Refer & earn** to copy their link and track referrals by wave. Wave 10 is seeded as a draft for October 15–21, 2026 in Africa/Lagos, with a provisional review deadline of October 29 at 00:00. Review those settings and activate the wave before accepting referrals. See the [implementation and rollout guide](docs/referral-and-wave-plan.md) for the initial activity policy and test commands.
 
 The admin directory shows a purple dot beside installation status when a matching
 GitHub identity has a recorded Supabase Auth sign-in. This includes existing

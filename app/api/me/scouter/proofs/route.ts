@@ -1,3 +1,6 @@
+import { z } from "zod";
+import { readWaves } from "../../../../../lib/referrals/server";
+import { acceptsEarnings } from "../../../../../lib/referrals/contracts";
 import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
 import { currentScouter, PROOF_BUCKET, sameOrigin, serviceClient } from "../../../../../lib/scouter/portal";
@@ -11,6 +14,10 @@ export async function POST(request: Request) {
     const current = await currentScouter();
     if (!current?.scouter.account_id) return NextResponse.json({ error: "GitHub scouter account required" }, { status: 403 });
     const form = await request.formData();
+    const waveId = form.get("waveId");
+    if (!z.uuid().safeParse(waveId).success || !(await readWaves()).some((w) => w.id === waveId && acceptsEarnings(w))) {
+      return NextResponse.json({ error: "Choose a wave that is accepting earnings" }, { status: 400 });
+    }
     const file = form.get("proof");
     const transaction = form.get("transaction");
     if (typeof transaction !== "string") {
@@ -33,6 +40,7 @@ export async function POST(request: Request) {
     const { error: rowError } = await client.from("scouter_withdrawal_proofs").insert({
       account_id: current.scouter.account_id,
       storage_path: path,
+      wave_id: waveId,
       filename,
       ...verified,
     });

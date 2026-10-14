@@ -1,3 +1,4 @@
+import { readWaves } from "../../../../lib/referrals/server";
 import { NextResponse } from "next/server";
 import { currentScouter, encryptPat, PatEncryptionConfigurationError, readPrivateProfile, readProofs, safeProfile, sameOrigin, serviceClient } from "../../../../lib/scouter/portal";
 import { getScouterProfile } from "../../../../lib/dashboard/scouters";
@@ -11,14 +12,15 @@ export const runtime = "nodejs";
 export async function GET() {
   try {
     const current = await currentScouter();
-    if (!current?.scouter.account_id) return NextResponse.json({ error: "GitHub scouter account required" }, { status: 403 });
-    const [work, privateProfile, proofs, exchangeRate] = await Promise.all([
+    if (!current?.scouter.account_id) return NextResponse.json({ error: "Connect your personal GitHub account to the Plinger App, then refresh this page." }, { status: 403 });
+    const [work, privateProfile, proofs, exchangeRate, waves] = await Promise.all([
       getScouterProfile(current.scouter.account_login),
       readPrivateProfile(current.scouter.account_id),
       readProofs(current.scouter.account_id),
       getUsdNgnRate(),
+      readWaves(),
     ]);
-    return NextResponse.json({ work, profile: safeProfile(privateProfile), proofs: proofs.map(publicProof), exchangeRate }, { headers: { "Cache-Control": "private, no-store" } });
+    return NextResponse.json({ work, profile: safeProfile(privateProfile), proofs: proofs.map(publicProof), exchangeRate, waves }, { headers: { "Cache-Control": "private, no-store" } });
   } catch (error) {
     console.error("[scouter:self:failed]", error);
     return NextResponse.json({ error: "Scouter data is unavailable" }, { status: 503 });

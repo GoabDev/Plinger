@@ -3,6 +3,9 @@ import { createCipheriv, createDecipheriv, randomBytes } from "node:crypto";
 import { createClient, type User } from "@supabase/supabase-js";
 import { createAuthClient } from "../supabase/auth-client";
 import { getScouterDirectory } from "../dashboard/scouters";
+import type { WithdrawalProofSummary, EarningPayment } from "./contracts";
+import { cookies } from "next/headers";
+import { readAll } from "../supabase/read-all";
 
 export const WITHDRAWAL_ADDRESS = "GAZB64YEKBGODTQA2FTPYS5Y2IOZ75EEQSDMDIWWMP2X3YI4YIVWOFDY";
 export const PROOF_BUCKET = "scouter-withdrawal-proofs";
@@ -18,7 +21,7 @@ export type ScouterPrivateProfile = {
   bank_updated_at: string | null;
 };
 
-export type WithdrawalProof = {
+export type WithdrawalProof = Pick<WithdrawalProofSummary, "wave_id" | "wave_name" | "share_percent" | "entitlement_stroops" | "paid_total_stroops" | "paid_total_kobo" | "balance_stroops" | "unknown_legacy_naira" | "payments"> & {
   id: string;
   account_id: number;
   storage_path: string;
@@ -66,6 +69,10 @@ export async function currentScouter() {
   const { data } = await auth.auth.getUser();
   const accountId = githubAccountId(data.user);
   if (!accountId) return null;
+  if ((await cookies()).get("plinger-referral-intent")?.value) return null;
+  const member = await serviceClient().from("scouter_members").select("account_id").eq("account_id", accountId).maybeSingle();
+  if (member.error) throw member.error;
+  if (!member.data) return null;
   const directory = await getScouterDirectory();
   if (directory.error) throw new Error("Scouter lookup unavailable");
   const scouter = directory.data.find((row) => row.account_id === accountId);
@@ -92,11 +99,19 @@ export async function readPrivateProfile(accountId: number) {
 }
 
 export async function readProofs(accountId: number) {
-  const { data, error } = await serviceClient().from("scouter_withdrawal_proofs")
-    .select("id,account_id,storage_path,filename,status,reviewed_at,transaction_hash,operation_id,amount_stroops,asset_code,asset_issuer,source_account,destination_account,ledger,transaction_created_at,chain_verified_at,payout_status,paid_at,payout_scouter_share_stroops,payout_exchange_rate_micros,payout_amount_kobo,payout_rate_source,payout_rate_updated_at,payout_rate_is_fallback,created_at")
-    .eq("account_id", accountId).order("created_at", { ascending: false }).limit(1000);
-  if (error) throw error;
-  return data as WithdrawalProof[];
+  const data = await readAll<WithdrawalProof>("scouter_earning_balances", { select: "*", account_id: `eq.${accountId}`, order: "created_at.desc,id.asc" });
+  return attachPayments(data) as Promise<WithdrawalProof[]>;
+}
+
+export async function attachPayments<T extends { id: string; status: string; balance_stroops: string; paid_total_stroops: string }>(claims: T[]) {
+  const payments: EarningPayment[] = [];
+  for (let offset = 0; offset < claims.length; offset += 100) {
+    payments.push(...await readAll<EarningPayment>("earning_payment_history", { select: "*", claim_id: `in.(${claims.slice(offset, offset + 100).map((c) => c.id).join(",")})`, order: "created_at.asc,id.asc" }));
+  }
+  return claims.map((claim) => ({ ...claim,
+    payout_status: claim.status === "confirmed" && BigInt(claim.balance_stroops) <= 0n && BigInt(claim.paid_total_stroops) > 0n ? "paid" as const : "unpaid" as const,
+    payments: payments.filter((payment) => payment.claim_id === claim.id),
+  }));
 }
 
 export class PatEncryptionConfigurationError extends Error {

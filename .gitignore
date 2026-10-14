@@ -16,3 +16,6 @@ yarn-error.log*
 pnpm-debug.log*
 
 tsconfig.tsbuildinfo
+tmp/referral-browser-results/
+tmp/referral-*.png
+playwright-report/

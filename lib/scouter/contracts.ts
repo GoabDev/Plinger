@@ -20,13 +20,15 @@ export const bankDetailsSchema = z.object({
 export const scouterUpdateSchema = z.discriminatedUnion("kind", [githubPatSchema, bankDetailsSchema]);
 export const proofReviewSchema = z.object({ status: z.enum(["confirmed", "rejected", "pending"]) });
 export const earningsActionSchema = z.union([
+  z.object({ action: z.literal("wave"), waveId: z.uuid(), reason: z.string().trim().min(10).max(1000) }),
   z.object({ action: z.literal("review"), status: z.enum(["confirmed", "rejected", "pending"]) }),
-  z.object({ action: z.literal("payout"), status: z.literal("paid"), rateMicros: z.string().regex(/^\d+$/, "Invalid payout rate") }),
-  z.object({ action: z.literal("payout"), status: z.literal("unpaid") }),
+  z.object({ action: z.literal("payout"), status: z.literal("paid"), rateMicros: z.string().regex(/^[1-9]\d{0,15}$/, "Invalid payout rate"), requestId: z.uuid(), expectedBalance: z.string().regex(/^[1-9]\d{0,18}$/), expectedPercent: z.enum(["60", "70"]) }),
+  z.object({ action: z.literal("reverse"), paymentId: z.uuid(), requestId: z.uuid(), reason: z.string().trim().min(10).max(1000) }),
 ]);
 
 const proofTypes = ["image/png", "image/jpeg", "image/webp", "application/pdf"];
 export const withdrawalProofFormSchema = z.object({
+  waveId: z.uuid("Select the wave this earning belongs to"),
   transaction: z.string().trim().min(1, "Enter the Stellar transaction URL or hash").max(300, "Transaction reference is too long"),
   proof: z
     .custom<FileList>((value) => typeof FileList !== "undefined" && value instanceof FileList && value.length === 1, "Choose a withdrawal proof")
@@ -50,6 +52,15 @@ export type ScouterPrivateState = {
 };
 
 export type WithdrawalProofSummary = {
+  wave_id: string | null;
+  wave_name: string | null;
+  share_percent: 60 | 70;
+  entitlement_stroops: string;
+  paid_total_stroops: string;
+  paid_total_kobo: string;
+  balance_stroops: string;
+  unknown_legacy_naira: boolean;
+  payments: EarningPayment[];
   id: string;
   filename: string;
   status: string;
@@ -73,6 +84,12 @@ export type WithdrawalProofSummary = {
   payout_rate_is_fallback: boolean | null;
 };
 
+export type EarningPayment = {
+  id: string; claim_id: string; amount_stroops: string; amount_kobo: string | null;
+  rate_micros: string | null; share_percent: 60 | 70; created_at: string;
+  reason: string; reversal_of: string | null; legacy: boolean;
+};
+
 export type AdminEarningClaim = WithdrawalProofSummary & {
   account_id: number;
   operation_id: string;
@@ -93,9 +110,10 @@ export type UsdNgnRate = {
   isFallback: boolean;
 };
 
-export type AdminEarningsData = { claims: AdminEarningClaim[]; exchangeRate: UsdNgnRate };
+export type AdminEarningsData = { claims: AdminEarningClaim[]; exchangeRate: UsdNgnRate; waves: import("../referrals/contracts").Wave[] };
 
 export type ScouterPortalData = {
+  waves: import("../referrals/contracts").Wave[];
   work: ScouterProfile | null;
   profile: ScouterPrivateState;
   proofs: WithdrawalProofSummary[];
