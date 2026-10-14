@@ -18,6 +18,7 @@ export default function Home() {
       <nav className="landing-nav" aria-label="Main navigation">
         <Brand />
         <div className="landing-nav-links">
+          <Link href="/docs">Docs</Link>
           <a href="#workflow">The workflow</a>
           <a
             href="https://github.com/apps/plinger"
@@ -192,6 +193,7 @@ export default function Home() {
       </section>
       <footer className="landing-footer">
         <Brand />
+        <Link href="/docs">Scouter guide</Link>
         <span>A clearer view of your GitHub work.</span>
         <Link href="/scouter/login">
           Let&apos;s see what&apos;s happening <ArrowRight size={16} />
