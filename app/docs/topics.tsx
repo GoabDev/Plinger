@@ -8,11 +8,7 @@ import styles from "./docs.module.css";
 export function Topics() {
   const pathname = usePathname();
   return (
-    <nav aria-label="Documentation topics" className={styles.topics} onClick={(event) => {
-      if ((event.target as HTMLElement).closest("a")) {
-        event.currentTarget.closest("details")?.removeAttribute("open");
-      }
-    }}>
+    <nav aria-label="Documentation topics" className={styles.topics}>
       <p>INTRODUCTION</p>
       <Link href="/docs" aria-current={pathname === "/docs" ? "page" : undefined}><BookOpen size={16} aria-hidden="true" /> Drips Wave</Link>
       <Link href="/docs/plinger" aria-current={pathname === "/docs/plinger" ? "page" : undefined}><Network size={16} aria-hidden="true" /> Plinger</Link>

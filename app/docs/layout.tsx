@@ -1,9 +1,10 @@
 import Link from "next/link";
-import { ArrowUpRight, ChevronDown } from "lucide-react";
+import { ArrowUpRight } from "lucide-react";
 import { Brand } from "../ui/brand";
 import { ThemeToggle } from "../ui/theme-toggle";
 import styles from "./docs.module.css";
 import { Topics } from "./topics";
+import { MobileMenu } from "./mobile-menu";
 
 export default function DocsLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -15,7 +16,7 @@ export default function DocsLayout({ children }: { children: React.ReactNode }) 
       </header>
       <div className={styles.frame}>
         <aside className={styles.sidebar}><Topics /><p className={styles.sidebarNote}>Your guide to Wave<br />and Plinger.</p></aside>
-        <details className={styles.mobileMenu}><summary>Browse the guide <ChevronDown size={16} aria-hidden="true" /></summary><Topics /></details>
+        <MobileMenu />
         {children}
       </div>
     </div>
