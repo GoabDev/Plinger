@@ -234,8 +234,26 @@ is recorded in `scouter_pat_access_log`.
 
 Apply `supabase/migrations/20260915060947_scouter_portal.sql` before using the
 portal. Enable the GitHub provider in Supabase Auth with a separate GitHub OAuth
-App, and add `https://YOUR-DOMAIN/auth/callback` to the Supabase redirect allow
-list. The GitHub OAuth App callback points to the Supabase Auth callback URL
+App, and add these entries to **Supabase > Authentication > URL Configuration >
+Redirect URLs** (replace `YOUR-DOMAIN` with the deployment's domain):
+
+- `https://YOUR-DOMAIN/auth/callback`
+- `https://YOUR-DOMAIN/auth/callback?next=/scouter`
+- `https://YOUR-DOMAIN/auth/callback?next=/scouter&referralIntent=*`
+
+The query parameters are part of the requested redirect URL. Allowing only the
+bare callback can send sign-ins to the Site URL instead. Keep Supabase's Site
+URL set to the production origin. Set `NEXT_PUBLIC_SITE_URL` to the app's origin
+for each deployment. For a preview deployment, use that preview's origin for
+the environment variable and allow its callback URLs too, so the PKCE cookie
+and return URL stay on the same host.
+
+The homepage recovers a returned `?code=...` through `/auth/callback`. If the
+fallback lost a pending referral's query parameters, signup pauses for explicit
+confirmation rather than silently dropping or automatically attaching it.
+An expired code or a missing PKCE cookie requires starting sign-in again.
+
+The GitHub OAuth App callback points to the Supabase Auth callback URL
 shown in the provider settings. Allow OAuth signups for scouters; dashboard
 admin access is still restricted by `PLINGER_ADMIN_EMAIL`.
 

@@ -52,4 +52,29 @@ describe("referral OAuth recovery", () => {
     await GET(new Request("https://plinger.test/auth/callback?code=oauth&next=/scouter"));
     expect(mocks.complete).toHaveBeenCalledWith({ id: "verified-user" }, null);
   });
+  it.each(["&next=/scouter&recovery=site", ""])("completes an ordinary sign-in after a fallback (%s)", async (query) => {
+    mocks.get.mockReturnValue(undefined);
+    const response = await GET(new Request(`https://plinger.test/auth/callback?code=oauth${query}`));
+    expect(mocks.exchange).toHaveBeenCalledWith("oauth");
+    expect(mocks.complete).toHaveBeenCalledWith({ id: "verified-user" }, null);
+    expect(response.headers.get("location")).toBe("https://plinger.test/scouter");
+  });
+  it.each(["&next=/scouter&recovery=site", ""])("preserves a pending referral for explicit confirmation after a fallback (%s)", async (query) => {
+    const response = await GET(new Request(`https://plinger.test/auth/callback?code=oauth${query}`));
+    expect(mocks.exchange).toHaveBeenCalledWith("oauth");
+    expect(mocks.complete).not.toHaveBeenCalled();
+    expect(mocks.remove).not.toHaveBeenCalled();
+    expect(response.headers.get("location")).toBe("https://plinger.test/scouter/onboarding?error=redirect");
+  });
+  it("still validates an explicit referral when the homepage forwards it", async () => {
+    await GET(new Request(`${callback}&recovery=site`));
+    expect(mocks.complete).toHaveBeenCalledWith({ id: "verified-user" }, intent);
+  });
+  it("returns failed fallback exchanges to login without completing signup", async () => {
+    mocks.exchange.mockResolvedValue({ error: new Error("missing PKCE verifier") });
+    const response = await GET(new Request("https://plinger.test/auth/callback?code=oauth&next=/scouter&recovery=site"));
+    expect(response.headers.get("location")).toBe("https://plinger.test/scouter/login?error=oauth");
+    expect(mocks.complete).not.toHaveBeenCalled();
+    expect(mocks.remove).not.toHaveBeenCalled();
+  });
 });

@@ -6,7 +6,8 @@ import { canonicalOrigin, completeSignup, referralAttemptCookie, REFERRAL_COOKIE
 export async function GET(request: Request) {
   const url = new URL(request.url);
   const code = url.searchParams.get("code");
-  const next = url.searchParams.get("next") === "/scouter" ? "/scouter" : "/login";
+  const missingDestination = !url.searchParams.has("next");
+  const next = missingDestination || url.searchParams.get("next") === "/scouter" ? "/scouter" : "/login";
   if (code) {
     const auth = await createAuthClient();
     if (auth) {
@@ -15,6 +16,12 @@ export async function GET(request: Request) {
         if (next === "/scouter") {
           const jar = await cookies();
           const intent = url.searchParams.get("referralIntent");
+          // A Site URL fallback can strip the attempt-specific query. Preserve
+          // the pending referral for explicit confirmation instead of finalizing
+          // an ordinary signup or guessing which tab's referral to attach.
+          if (!intent && (missingDestination || url.searchParams.get("recovery") === "site") && jar.get(REFERRAL_COOKIE)?.value) {
+            return NextResponse.redirect(new URL("/scouter/onboarding?error=redirect", url.origin));
+          }
           const validIntent = intent && /^[0-9a-f-]{36}$/i.test(intent) && jar.get(referralAttemptCookie(intent))?.value === intent;
           // Bind attribution to this OAuth attempt, even if another tab starts signing in.
           if (intent) jar.set(REFERRAL_COOKIE, validIntent ? intent : "invalid", { httpOnly: true, secure: canonicalOrigin().startsWith("https:"), sameSite: "lax", path: "/", maxAge: 7 * 86400 });
