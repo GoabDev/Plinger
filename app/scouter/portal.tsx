@@ -1,7 +1,5 @@
 "use client";
 
-import ReferralsView from "./referrals-view";
-import { acceptsEarnings } from "../../lib/referrals/contracts";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
@@ -13,7 +11,7 @@ import ScouterWorkspace, { scouterViews, type ScouterView } from "./workspace";
 import { Input } from "../ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
 import { DocumentUpload } from "../ui/document-upload";
-import { formatNaira, formatNairaKobo, formatNairaRate, formatUsd } from "../../lib/scouter/money";
+import { formatNaira, formatNairaKobo, formatNairaRate, formatUsd, splitEarnings } from "../../lib/scouter/money";
 const WITHDRAWAL_ADDRESS = "GAZB64YEKBGODTQA2FTPYS5Y2IOZ75EEQSDMDIWWMP2X3YI4YIVWOFDY";
 
 export default function ScouterPortal() {
@@ -108,7 +106,7 @@ export default function ScouterPortal() {
 
   if (!data) {
     const loadError = error || (portalQuery.error instanceof Error ? portalQuery.error.message : "");
-    return <ScouterWorkspace view={view} navigate={navigate}><div className="scouter-loading" role={loadError ? "alert" : "status"}>{loadError || "Loading your workspace..."}{loadError && <><a className="button button-black" href="https://github.com/apps/plinger/installations/new" target="_blank" rel="noreferrer">Connect the Plinger GitHub App</a><button type="button" className="button button-white" disabled={refreshing} onClick={refresh}><RefreshCw size={16} /> Retry</button></>}</div></ScouterWorkspace>;
+    return <ScouterWorkspace view={view} navigate={navigate}><div className="scouter-loading" role={loadError ? "alert" : "status"}>{loadError || "Loading your workspace..."}{loadError && <button type="button" className="button button-white" disabled={refreshing} onClick={refresh}><RefreshCw size={16} /> Retry</button>}</div></ScouterWorkspace>;
   }
   const { work, profile, proofs, exchangeRate } = data;
   if (!work) return <ScouterWorkspace view={view} navigate={navigate}><div className="scouter-loading" role="alert">This GitHub account has no personal Plinger installation yet.</div></ScouterWorkspace>;
@@ -119,12 +117,12 @@ export default function ScouterPortal() {
   const pendingProofs = proofs.filter((item) => item.status === "pending").length;
   const confirmedProofs = proofs.filter((item) => item.status === "confirmed" && item.amount_stroops);
   const confirmedGross = confirmedProofs.reduce((sum, item) => sum + BigInt(item.amount_stroops ?? "0"), BigInt(0));
-  const confirmedShare = confirmedProofs.reduce((sum, item) => sum + BigInt(item.entitlement_stroops), 0n);
-  const paidProofs = proofs.filter((item) => BigInt(item.paid_total_stroops) > 0n);
-  const paidShare = paidProofs.reduce((sum, item) => sum + BigInt(item.paid_total_stroops), BigInt(0));
-  const paidKobo = paidProofs.reduce((sum, item) => sum + BigInt(item.paid_total_kobo), BigInt(0));
-  const legacyPaidCount = paidProofs.filter((item) => item.unknown_legacy_naira).length;
-  const outstandingShare = confirmedProofs.reduce((sum, item) => sum + (BigInt(item.balance_stroops) > 0n ? BigInt(item.balance_stroops) : 0n), 0n);
+  const confirmedShare = splitEarnings(confirmedGross).scouter;
+  const paidProofs = confirmedProofs.filter((item) => item.payout_status === "paid");
+  const paidShare = paidProofs.reduce((sum, item) => sum + BigInt(item.payout_scouter_share_stroops ?? splitEarnings(item.amount_stroops ?? "0").scouter), BigInt(0));
+  const paidKobo = paidProofs.reduce((sum, item) => sum + BigInt(item.payout_amount_kobo ?? "0"), BigInt(0));
+  const legacyPaidCount = paidProofs.filter((item) => !item.payout_amount_kobo).length;
+  const outstandingShare = confirmedProofs.filter((item) => item.payout_status !== "paid").reduce((sum, item) => sum + splitEarnings(item.amount_stroops ?? "0").scouter, BigInt(0));
   const rateMicros = exchangeRate.rateMicros;
   const title = scouterViews.find((item) => item.id === view)!.label;
 
@@ -132,7 +130,6 @@ export default function ScouterPortal() {
     <div className="page-heading"><div><p className="overline">SCOUTER WORKSPACE</p><h1>{title}</h1></div><div className="heading-actions"><button type="button" className="button button-white" onClick={refresh} disabled={refreshing || Boolean(busy)}><RefreshCw size={15} className={refreshing ? "spinning" : ""} /> Refresh</button><a href={`https://github.com/${login}`} target="_blank" rel="noreferrer" className="button button-black"><img src="/github-mark-white.svg" width={16} height={16} alt="" /> GitHub <ArrowUpRight size={14} /></a></div></div>
     {(error || message) && <p className={`scouter-notice ${error ? "error" : ""}`} role={error ? "alert" : "status"}>{error || message}</p>}
 
-    {view === "referrals" && <ReferralsView />}
     {view === "overview" && <>
       <div className="metrics scouter-overview-metrics">{[
         { label: "Open issues", count: work.openIssues.count, icon: CircleDot, tone: "green" },
@@ -172,7 +169,7 @@ export default function ScouterPortal() {
     {view === "earnings" && <>
     <div className="earnings-summary scouter-earnings-summary" aria-label="Your earnings totals">
       <article className="earnings-summary-card"><span><span>Confirmed gross</span><BadgeDollarSign size={18} aria-hidden="true" /></span><strong>{formatUsd(confirmedGross)}</strong><small>{formatNaira(confirmedGross, rateMicros)} total received</small></article>
-      <article className="earnings-summary-card green"><span><span>Your share</span><WalletCards size={18} aria-hidden="true" /></span><strong>{formatUsd(confirmedShare)}</strong><small>{formatNaira(confirmedShare, rateMicros)} at {formatNairaRate(rateMicros)}</small></article>
+      <article className="earnings-summary-card green"><span><span>Your 60%</span><WalletCards size={18} aria-hidden="true" /></span><strong>{formatUsd(confirmedShare)}</strong><small>{formatNaira(confirmedShare, rateMicros)} at {formatNairaRate(rateMicros)}</small></article>
       <article className="earnings-summary-card green"><span><span>Paid to you</span><Check size={18} aria-hidden="true" /></span><strong>{formatUsd(paidShare)}</strong><small>{formatNairaKobo(paidKobo)} recorded{legacyPaidCount ? ` \u00b7 ${legacyPaidCount} legacy` : ""}</small></article>
       <article className="earnings-summary-card amber"><span><span>Awaiting payout</span><RefreshCw size={18} aria-hidden="true" /></span><strong>{formatUsd(outstandingShare)}</strong><small>{formatNaira(outstandingShare, rateMicros)}</small></article>
     </div>
@@ -188,17 +185,11 @@ export default function ScouterPortal() {
     </section>
 
     <section className="scouter-band" aria-labelledby="proof-heading"><div className="scouter-band-heading"><h2 id="proof-heading"><Upload size={18} /> Submit an earning</h2><span>{proofs.length} submitted</span></div>
-      <form className="scouter-form scouter-proof-form" onSubmit={proofForm.handleSubmit((values) => { const file = values.proof.item(0); if (file) { setError(""); setMessage(""); proofMutation.mutate({ file, transaction: values.transaction, waveId: values.waveId }); } })} aria-busy={busy === "proof"}>
-        <label htmlFor="earning-wave">Earning wave</label><select id="earning-wave" className="referral-input" {...proofForm.register("waveId")} disabled={Boolean(busy)}><option value="">Select the wave shown on your withdrawal proof</option>{data.waves.filter((w) => acceptsEarnings(w)).map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}</select><p className="scouter-consent">Your admin will verify this wave against the proof. Wave dates and the upload date may differ.</p>{proofForm.formState.errors.waveId && <p role="alert">{proofForm.formState.errors.waveId.message}</p>}
+      <form className="scouter-form scouter-proof-form" onSubmit={proofForm.handleSubmit((values) => { const file = values.proof.item(0); if (file) { setError(""); setMessage(""); proofMutation.mutate({ file, transaction: values.transaction }); } })} aria-busy={busy === "proof"}>
         <label htmlFor="scouter-transaction">Stellar transaction URL or hash</label><Input id="scouter-transaction" placeholder="https://stellar.expert/explorer/public/tx/..." disabled={Boolean(busy)} aria-invalid={Boolean(proofForm.formState.errors.transaction)} aria-describedby={`scouter-transaction-help${proofForm.formState.errors.transaction ? " scouter-transaction-error" : ""}`} {...proofForm.register("transaction")} /><p id="scouter-transaction-help" className="scouter-consent">We verify the amount, USDC issuer, and Plinger destination directly on Stellar.</p>{proofForm.formState.errors.transaction && <p id="scouter-transaction-error" className="scouter-field-error" role="alert">{proofForm.formState.errors.transaction.message}</p>}
         <label htmlFor="scouter-proof">Drip Wave withdrawal confirmation</label><DocumentUpload id="scouter-proof" file={selectedProof} disabled={Boolean(busy)} error={proofForm.formState.errors.proof?.message} onFiles={(files) => proofForm.setValue("proof", files, { shouldDirty: true, shouldTouch: true, shouldValidate: true })} /><button type="submit" className="button button-black" disabled={!proofForm.formState.isValid || Boolean(busy)}>{busy === "proof" ? "Verifying transaction..." : "Verify and submit earning"}</button>
       </form>
-      {proofs.length > 0 && <div className="scouter-earning-list">{proofs.map((item) => <article key={item.id}>
-        <div><strong>{item.amount_stroops ? formatUsd(item.amount_stroops) : "Legacy proof"}</strong><span>{item.wave_name ?? "Legacy earning"}</span></div>
-        <div><strong>{formatUsd(item.entitlement_stroops)}</strong><span>Your {item.share_percent}% share</span><span>{formatUsd(item.paid_total_stroops)} paid · {formatNairaKobo(item.paid_total_kobo)} recorded</span>{BigInt(item.balance_stroops) < 0n && <span>Payment adjustment requires admin review</span>}</div>
-        <div><span className="badge neutral">{item.status}</span>{item.status === "confirmed" && <span className="badge neutral">{BigInt(item.balance_stroops) > 0n ? `${formatUsd(item.balance_stroops)} due` : "Settled"}</span>}</div>
-        <div>{item.transaction_hash && <a href={`https://stellar.expert/explorer/public/tx/${item.transaction_hash}`} target="_blank" rel="noreferrer">Transaction <ArrowUpRight size={13} /></a>}<a href={`/api/scouters/${encodeURIComponent(login)}/proofs/${item.id}`} target="_blank" rel="noreferrer">Proof <ArrowUpRight size={13} /></a></div>
-      </article>)}</div>}
+      {proofs.length > 0 && <div className="scouter-earning-list">{proofs.map((item) => { const calculatedShare = splitEarnings(item.amount_stroops ?? "0").scouter; const share = item.payout_status === "paid" ? BigInt(item.payout_scouter_share_stroops ?? calculatedShare) : calculatedShare; const nairaLabel = item.payout_status === "paid" ? item.payout_amount_kobo ? `${formatNairaKobo(item.payout_amount_kobo)} paid${item.payout_exchange_rate_micros ? ` at ${formatNairaRate(item.payout_exchange_rate_micros)}` : ""}` : "Historical naira unavailable" : `${formatNaira(share, rateMicros)} estimate`; return <article key={item.id}><div><strong>{item.amount_stroops ? formatUsd(item.amount_stroops) : "Legacy proof"}</strong><span>{item.transaction_created_at ? formatDate(item.transaction_created_at) : formatDate(item.created_at)}</span></div><div><strong>{item.amount_stroops ? formatUsd(share) : "\u2014"}</strong><span>Your 60% \u00b7 {item.amount_stroops ? nairaLabel : "Not calculated"}</span></div><div><span className={`badge ${item.status === "confirmed" ? "green" : item.status === "rejected" ? "red" : "amber"}`}>{item.status}</span>{item.status === "confirmed" && <span className={`badge ${item.payout_status === "paid" ? "green" : "neutral"}`}>{item.payout_status === "paid" ? "Paid" : "Payout due"}</span>}</div><div>{item.transaction_hash && <a href={`https://stellar.expert/explorer/public/tx/${item.transaction_hash}`} target="_blank" rel="noreferrer">Transaction <ArrowUpRight size={13} aria-hidden="true" /></a>}<a href={`/api/scouters/${encodeURIComponent(login)}/proofs/${item.id}`} target="_blank" rel="noreferrer">Proof <ArrowUpRight size={13} aria-hidden="true" /></a></div></article>; })}</div>}
     </section>
     </>}
   </ScouterWorkspace>;

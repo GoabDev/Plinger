@@ -1,4 +1,3 @@
-import { changeEarning } from "../../../../../../lib/scouter/accounting";
 import { NextResponse } from "next/server";
 import { getScouterProfile } from "../../../../../../lib/dashboard/scouters";
 import { createAuthClient } from "../../../../../../lib/supabase/auth-client";
@@ -55,8 +54,15 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ lo
     const parsed = proofReviewSchema.safeParse(await request.json());
     if (!parsed.success) return NextResponse.json({ error: "Invalid status" }, { status: 400 });
     const body = parsed.data;
-    const error = await changeEarning(data.user!.id, id, { action: "review", status: body.status });
-    if (error) return NextResponse.json({ error }, { status: 409 });
+    const { error } = await context.client.from("scouter_withdrawal_proofs")
+      .update({
+        status: body.status,
+        reviewed_at: body.status === "pending" ? null : new Date().toISOString(),
+        reviewed_by: body.status === "pending" ? null : data.user!.id,
+        ...(body.status !== "confirmed" ? { payout_status: "unpaid", paid_at: null, paid_by: null } : {}),
+      })
+      .eq("id", id).eq("account_id", context.proof.account_id);
+    if (error) throw error;
     return NextResponse.json({ ok: true }, { headers: { "Cache-Control": "private, no-store" } });
   } catch (error) {
     console.error("[scouter:proof:review:failed]", error);

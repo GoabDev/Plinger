@@ -9,7 +9,6 @@
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "test:browser": "playwright test",
     "supabase": "set SUPABASE_TELEMETRY_DISABLED=1&& supabase",
     "supabase:login": "set SUPABASE_TELEMETRY_DISABLED=1&& supabase login",
     "supabase:link": "set SUPABASE_TELEMETRY_DISABLED=1&& supabase link",
@@ -40,8 +39,6 @@
     "zod": "^4.6.5"
   },
   "devDependencies": {
-    "@electric-sql/pglite": "0.5.8",
-    "@playwright/test": "1.64.1",
     "@tailwindcss/postcss": "^4.3.3",
     "@types/node": "latest",
     "@types/react": "latest",

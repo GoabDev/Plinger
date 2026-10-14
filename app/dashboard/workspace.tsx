@@ -45,7 +45,6 @@ import { githubSyncMutationKey, syncGitHub } from "../../lib/github/client";
 import type { ScouterRow } from "../../lib/dashboard/scouters";
 import ScoutersView from "./scouters-view";
 import EarningsView from "./earnings-view";
-import ReferralsView from "./referrals-view";
 import { Brand } from "../ui/brand";
 import { MonthPicker } from "../ui/month-picker";
 import { ThemeToggle } from "../ui/theme-toggle";
@@ -67,8 +66,7 @@ type View =
   | "pull-requests"
   | "merged"
   | "scouters"
-  | "earnings"
-  | "referrals";
+  | "earnings";
 type Props = {
   month: string;
   repositories: RepositoryRow[];
@@ -93,7 +91,6 @@ const navigation: { id: View; label: string; icon: LucideIcon }[] = [
   { id: "activity", label: "Activity", icon: Activity },
   { id: "repositories", label: "Repositories", icon: BookOpen },
   { id: "scouters", label: "Scouters", icon: Users },
-  { id: "referrals", label: "Waves & referrals", icon: Users },
   { id: "earnings", label: "Earnings", icon: BadgeDollarSign },
   { id: "issues", label: "Open issues", icon: CircleDot },
   { id: "closed-issues", label: "Closed issues", icon: Check },
@@ -101,12 +98,11 @@ const navigation: { id: View; label: string; icon: LucideIcon }[] = [
   { id: "merged", label: "Merged", icon: GitMerge },
 ];
 const subtitles: Record<View, string> = {
-  referrals: "Manage waves, verify completed work, and review referral benefits.",
   overview: "A little clarity on everything moving across your repositories.",
   activity: "The latest updates from your connected repositories.",
   repositories: "Your recently updated repositories, together in one place.",
   scouters: "Personal GitHub accounts connected to Plinger and their work.",
-  earnings: "Verified withdrawals, wave benefits, and Scouter payouts.",
+  earnings: "Verified withdrawals, the 60/40 split, and scouter payouts.",
   issues: "Open work, assignments, and the details that matter.",
   "closed-issues": "Recently closed issues across your repositories.",
   "pull-requests":
@@ -385,7 +381,7 @@ export default function DashboardWorkspace({
               <h1>{title}</h1>
               <p>{subtitles[view]}</p>
             </div>
-            {view !== "earnings" && view !== "referrals" && <div className="heading-actions">
+            {view !== "earnings" && <div className="heading-actions">
               <button
                 className="button button-white"
                 onClick={refresh}
@@ -406,9 +402,9 @@ export default function DashboardWorkspace({
               </a>
             </div>}
           </div>
-          {view !== "scouters" && view !== "earnings" && view !== "referrals" && (
+          {view !== "scouters" && view !== "earnings" && (
             <div className="filter-bar activity-period" aria-label="Activity period">
-              <label htmlFor="activity-month">Activity month (UTC)</label>
+              <label htmlFor="activity-month">Wave month (UTC)</label>
               <MonthPicker value={month} disabled={pending || syncMutation.isPending}
                 onValueChange={(value) => startTransition(() => router.push(`/dashboard?month=${value}`, { scroll: false }))} />
               <button className="button button-white" disabled={pending || syncMutation.isPending}
@@ -481,7 +477,7 @@ export default function DashboardWorkspace({
               />
             </section>
           )}
-          {view !== "scouters" && view !== "earnings" && view !== "referrals" && <div className="workspace-toolbar">
+          {view !== "scouters" && view !== "earnings" && <div className="workspace-toolbar">
             <label className="search-field">
               <Search size={17} />
               <input
@@ -516,8 +512,7 @@ export default function DashboardWorkspace({
             <ScoutersView scouters={scouters} total={scouterCount} unavailable={scoutersUnavailable} historyUnavailable={scouterHistoryUnavailable} refreshKey={fetchedAt} />
           )}
           {view === "earnings" && <EarningsView totalScouters={scouterCount} />}
-          {view === "referrals" && <ReferralsView />}
-          {view !== "scouters" && view !== "earnings" && view !== "referrals" && <div
+          {view !== "scouters" && view !== "earnings" && <div
             aria-busy={pending}
             className={view === "overview" ? "overview-grid" : "single-view"}
           >
