@@ -28,6 +28,8 @@ beforeAll(async () => {
   const files = readdirSync("supabase/migrations").filter((name) => name.endsWith(".sql")).sort();
   for (const file of files) {
     if (file.includes('referrals_and_waves')) {
+      // Hosted Supabase grants new tables/views to API roles by default.
+      await db.exec('alter default privileges in schema public grant all on tables to anon, authenticated, service_role');
       await db.exec(`insert into public.scouter_profiles(account_id,account_login) values(77,'legacy');
         insert into public.scouter_withdrawal_proofs(account_id,storage_path,filename,status,amount_stroops,payout_status,paid_at,paid_by,payout_scouter_share_stroops,payout_exchange_rate_micros,payout_amount_kobo,payout_rate_source,payout_rate_is_fallback)
         values(77,'legacy-proof','proof.png','confirmed',1000000000,'paid',now(),'${actor}',600000000,1200000000,7200000,'historical',false);`);
@@ -104,7 +106,12 @@ describe("wave and referral database invariants", () => {
     for (let i=0;i<20;i++) await db.query("select public.create_referral_intent($1,'visitor')", ['00000000-0000-4000-8000-000000000060']);
     await expect(db.query("select public.create_referral_intent($1,'visitor')", ['00000000-0000-4000-8000-000000000060'])).rejects.toThrow('Too many signup attempts');
     await pay(); await db.exec('set role service_role');
-    try { await expect(db.exec('update public.earning_payments set amount_stroops=1')).rejects.toThrow('permission denied'); }
+    try {
+      await expect(db.exec('update public.earning_payments set amount_stroops=1')).rejects.toThrow('permission denied');
+      await expect(db.exec('delete from public.earning_payments')).rejects.toThrow('permission denied');
+      await expect(db.exec('truncate public.referral_audit')).rejects.toThrow('permission denied');
+      await expect(db.exec('delete from public.earning_payment_history')).rejects.toThrow('permission denied');
+    }
     finally { await db.exec('reset role'); }
   });
   it("allows audited extensions but rejects shortening or overlapping another wave", async () => {

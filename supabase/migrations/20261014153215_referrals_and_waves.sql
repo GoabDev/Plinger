@@ -378,7 +378,7 @@ end $$;
 do $$ declare t text; f record; begin
   foreach t in array array['waves','scouter_members','referral_codes','referral_intents','referrals','referral_audit','earning_payments'] loop
     execute format('alter table public.%I enable row level security',t);
-    execute format('revoke all on public.%I from public, anon, authenticated',t);
+    execute format('revoke all on public.%I from public, anon, authenticated, service_role',t);
     execute format('grant select, insert, update on public.%I to service_role',t);
   end loop;
   for f in select oid::regprocedure as signature from pg_proc where pronamespace = 'public'::regnamespace
@@ -388,7 +388,7 @@ do $$ declare t text; f record; begin
   end loop;
 end $$;
 revoke update on public.earning_payments,public.referral_audit from service_role;
-revoke all on public.scouter_earning_balances from public,anon,authenticated;
+revoke all on public.scouter_earning_balances from public,anon,authenticated,service_role;
 grant select on public.scouter_earning_balances to service_role;
-revoke all on public.earning_payment_history from public,anon,authenticated;
+revoke all on public.earning_payment_history from public,anon,authenticated,service_role;
 grant select on public.earning_payment_history to service_role;

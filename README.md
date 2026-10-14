@@ -4,7 +4,7 @@ Plinger is a GitHub App dashboard for repository signals: issue assignments, pul
 
 ## Feature Plans
 
-- [Referral and wave implementation](docs/referral-and-wave-plan.md): qualification rules, Wave 10 dates, signup recovery, payout accounting, verification and rollout. Implemented locally; apply the migration and activate the wave before production use.
+- [Referral and wave implementation](docs/referral-and-wave-plan.md): qualification rules, Wave 10 dates, signup recovery, payout accounting, verification and rollout. The migration is applied to the connected Plinger Supabase project; deploy the feature app and activate the wave before use. Other databases still require the migrations.
 
 ## Local Setup
 
@@ -284,7 +284,7 @@ do not contribute to confirmed totals. Scouters can only access their own
 earnings through the authenticated `/api/me/scouter` route, while the aggregate
 earnings API requires the configured admin account.
 
-Apply `supabase/migrations/20261014133420_referrals_and_waves.sql` before deploying the referral feature. Payment recording now appends ledger entries containing the Scouter's USD amount, split, exact USD/NGN rate, naira amount in kobo, source and time. Historical payments remain fixed when rates or referral eligibility change. Late qualification creates only the remaining top-up obligation. Corrections append reasoned reversals; they never clear a paid snapshot or send/recover money automatically.
+Apply `supabase/migrations/20261014153215_referrals_and_waves.sql` before deploying the referral feature. Payment recording now appends ledger entries containing the Scouter's USD amount, split, exact USD/NGN rate, naira amount in kobo, source and time. Historical payments remain fixed when rates or referral eligibility change. Late qualification creates only the remaining top-up obligation. Corrections append reasoned reversals; they never clear a paid snapshot or send/recover money automatically.
 
 The admin **Waves & referrals** view manages dates, activity evidence and qualification. Scouters use **Refer & earn** to copy their link and track referrals by wave. Wave 10 is seeded as a draft for October 15–21, 2026 in Africa/Lagos, with a provisional review deadline of October 29 at 00:00. Review those settings and activate the wave before accepting referrals. See the [implementation and rollout guide](docs/referral-and-wave-plan.md) for the initial activity policy and test commands.
 

@@ -2,7 +2,7 @@
 
 Updated: 14 October 2026
 
-Status: implemented locally following authorization to code. The migration and app have not been deployed to production. Wave 10 is seeded as a draft requiring admin activation.
+Status: feature implemented and pushed to `feat/referrals-and-waves`. The referral migration was deployed through Supabase MCP on 14 October 2026 to project `qkjnsxyozetkmorpmxbe`, recorded as `20261014153215_referrals_and_waves`. Wave 10 remains a draft requiring admin activation. Deployment of the feature application to Vercel has not been verified.
 
 ## Product rules
 
@@ -79,7 +79,7 @@ Legacy snapshots are imported without changing recorded amounts or rates. If a h
 
 ## Schema and access
 
-Migration: `supabase/migrations/20261014133420_referrals_and_waves.sql`.
+Migration: `supabase/migrations/20261014153215_referrals_and_waves.sql`.
 
 New tables: `waves`, `scouter_members`, `referral_codes`, `referral_intents`, `referrals`, `referral_audit`, `earning_payments`. Two accounting views and the earning `wave_id` column support shared calculations. Benefits derive from qualified referrals for the same account and wave.
 
@@ -91,7 +91,7 @@ A transaction advisory lock serializes referral, wave and financial mutations. T
 
 | Area | Files |
 | --- | --- |
-| Schema and transactions | `supabase/migrations/20261014133420_referrals_and_waves.sql` |
+| Schema and transactions | `supabase/migrations/20261014153215_referrals_and_waves.sql` |
 | Contracts and server access | `lib/referrals/` |
 | Signup and recovery | `app/scouter/login/`, `app/auth/callback/`, `app/scouter/onboarding/` |
 | Scouter referrals | `app/scouter/referrals-view.tsx` |
@@ -125,4 +125,8 @@ Deployment sequence:
 5. In **Waves & referrals**, review and activate Wave 10. Activating a future wave still prevents intake before its start.
 6. Sync activity, review evidence and claims, record actual payments, move to settling, and close once pending decisions are resolved.
 
-Production deployment, hosted migration execution and live OAuth tests have not been performed in this session. To pause intake, move the active wave to settling; preserve referral and payment history rather than dropping feature tables.
+Hosted migration verification confirmed seven original claims, five imported legacy payments, 37 member/code pairs and no payment-import mismatches. One older payment had no USD snapshot and uses its original 60% entitlement; its missing historical naira amount remains flagged as unknown. Browser roles cannot access the new tables or RPCs, and the service role cannot update, delete or truncate payment/audit history. Tests now reproduce the hosted project's broad default grants before checking the migration's restrictions.
+
+Supabase's security advisor reports no new warnings or errors; the pre-existing disabled leaked-password protection warning remains. RLS-without-policy notices are expected for the server-only access model. The performance advisor's missing referral-intent code index is addressed by a follow-up migration.
+
+The local migration filename matches the timestamp assigned by MCP so future CLI deployments will recognize it as already applied. Production application deployment and live OAuth tests remain unverified. Old application versions cannot submit new earnings or record payouts after the ledger guard is installed; deploy the feature app for those actions. To pause intake, move the active wave to settling and preserve history.
