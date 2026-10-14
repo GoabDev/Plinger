@@ -1,5 +1,6 @@
 import "server-only";
-import { serviceClient, WITHDRAWAL_ADDRESS, type WithdrawalProof } from "./portal";
+import { readAll } from "../supabase/read-all";
+import { attachPayments, serviceClient, WITHDRAWAL_ADDRESS, type WithdrawalProof } from "./portal";
 
 export const USDC_ISSUER = "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN";
 const HORIZON_URL = "https://horizon.stellar.org";
@@ -92,15 +93,12 @@ export async function verifyStellarWithdrawal(reference: string) {
 }
 
 export async function readAllEarnings() {
-  const client = serviceClient();
-  const [{ data: claims, error: claimsError }, { data: profiles, error: profilesError }] = await Promise.all([
-    client.from("scouter_withdrawal_proofs").select("id,account_id,storage_path,filename,status,reviewed_at,created_at,transaction_hash,operation_id,amount_stroops,asset_code,asset_issuer,source_account,destination_account,ledger,transaction_created_at,chain_verified_at,payout_status,paid_at,payout_scouter_share_stroops,payout_exchange_rate_micros,payout_amount_kobo,payout_rate_source,payout_rate_updated_at,payout_rate_is_fallback").not("transaction_hash", "is", null).order("transaction_created_at", { ascending: false }).limit(1000),
-    client.from("scouter_profiles").select("account_id,account_login,bank_name,bank_account_name,bank_account_number"),
+  const [claims, profiles] = await Promise.all([
+    readAll<WithdrawalProof>("scouter_earning_balances", { select: "*", transaction_hash: "not.is.null", order: "transaction_created_at.desc,id.asc" }),
+    readAll<{ account_id: number; account_login: string; bank_name: string | null; bank_account_name: string | null; bank_account_number: string | null }>("scouter_profiles", { select: "account_id,account_login,bank_name,bank_account_name,bank_account_number", order: "account_id.asc" }),
   ]);
-  if (claimsError) throw claimsError;
-  if (profilesError) throw profilesError;
   const byAccount = new Map((profiles ?? []).map((profile) => [String(profile.account_id), profile]));
-  return (claims ?? []).map((claim) => ({
+  return (await attachPayments(claims ?? [])).map((claim) => ({
     ...claim,
     amount_stroops: String(claim.amount_stroops),
     payout_scouter_share_stroops: claim.payout_scouter_share_stroops === null ? null : String(claim.payout_scouter_share_stroops),

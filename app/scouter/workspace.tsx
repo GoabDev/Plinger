@@ -10,6 +10,7 @@ export const scouterViews = [
   { id: "overview", label: "Overview", icon: LayoutDashboard },
   { id: "work", label: "My work", icon: CircleDot },
   { id: "pat", label: "GitHub PAT", icon: LockKeyhole },
+  { id: "referrals", label: "Refer & earn", icon: BadgeDollarSign },
   { id: "earnings", label: "Earnings", icon: BadgeDollarSign },
 ] as const;
 export type ScouterView = typeof scouterViews[number]["id"];

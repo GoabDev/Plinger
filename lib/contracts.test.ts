@@ -38,7 +38,7 @@ describe("shared validation contracts", () => {
 
   it("restricts earnings review and payout actions", () => {
     expect(earningsActionSchema.safeParse({ action: "review", status: "confirmed" }).success).toBe(true);
-    expect(earningsActionSchema.safeParse({ action: "payout", status: "paid", rateMicros: "1330390000" }).success).toBe(true);
+    expect(earningsActionSchema.safeParse({ action: "payout", status: "paid", rateMicros: "1330390000", requestId: "00000000-0000-4000-8000-000000000001", expectedBalance: "600000000", expectedPercent: "60" }).success).toBe(true);
     expect(earningsActionSchema.safeParse({ action: "payout", status: "paid" }).success).toBe(false);
     expect(earningsActionSchema.safeParse({ action: "payout", status: "confirmed" }).success).toBe(false);
   });
