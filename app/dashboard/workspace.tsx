@@ -385,7 +385,7 @@ export default function DashboardWorkspace({
               <h1>{title}</h1>
               <p>{subtitles[view]}</p>
             </div>
-            {view !== "earnings" && <div className="heading-actions">
+            {view !== "earnings" && view !== "referrals" && <div className="heading-actions">
               <button
                 className="button button-white"
                 onClick={refresh}
@@ -406,7 +406,7 @@ export default function DashboardWorkspace({
               </a>
             </div>}
           </div>
-          {view !== "scouters" && view !== "earnings" && (
+          {view !== "scouters" && view !== "earnings" && view !== "referrals" && (
             <div className="filter-bar activity-period" aria-label="Activity period">
               <label htmlFor="activity-month">Wave month (UTC)</label>
               <MonthPicker value={month} disabled={pending || syncMutation.isPending}
@@ -432,7 +432,7 @@ export default function DashboardWorkspace({
               </motion.p>
             ) : null}
           </AnimatePresence>
-          {(!connected || failed) && (
+          {view !== "referrals" && (!connected || failed) && (
             <div className="connection-notice" role="status">
               <Inbox size={19} />
               <div>
@@ -481,7 +481,7 @@ export default function DashboardWorkspace({
               />
             </section>
           )}
-          {view !== "scouters" && view !== "earnings" && <div className="workspace-toolbar">
+          {view !== "scouters" && view !== "earnings" && view !== "referrals" && <div className="workspace-toolbar">
             <label className="search-field">
               <Search size={17} />
               <input
@@ -517,7 +517,7 @@ export default function DashboardWorkspace({
           )}
           {view === "earnings" && <EarningsView totalScouters={scouterCount} />}
           {view === "referrals" && <ReferralsView />}
-          {view !== "scouters" && view !== "earnings" && <div
+          {view !== "scouters" && view !== "earnings" && view !== "referrals" && <div
             aria-busy={pending}
             className={view === "overview" ? "overview-grid" : "single-view"}
           >

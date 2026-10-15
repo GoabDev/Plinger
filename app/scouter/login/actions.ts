@@ -9,11 +9,14 @@ export async function signInWithGitHub() {
   if (maintenanceEnabled() && !validMaintenancePass((await cookies()).get(MAINTENANCE_COOKIE)?.value)) redirect("/maintenance");
   const auth = await createAuthClient();
   if (!auth) redirect("/scouter/login?error=config");
+  // Replace this browser's auth session; the separate maintenance pass survives.
+  const { error: signOutError } = await auth.auth.signOut({ scope: "local" });
+  if (signOutError) redirect("/scouter/login?error=oauth");
   const requestHeaders = await headers();
   const site = requestHeaders.get("origin") || process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, "") || "http://localhost:3000";
   const { data, error } = await auth.auth.signInWithOAuth({
     provider: "github",
-    options: { redirectTo: `${site}/auth/callback?next=/scouter` },
+    options: { redirectTo: `${site}/auth/callback?next=/scouter`, queryParams: { prompt: "select_account" } },
   });
   if (error || !data.url) redirect("/scouter/login?error=oauth");
   redirect(data.url);
