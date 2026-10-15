@@ -1,10 +1,12 @@
 "use server";
 
 import { redirect } from "next/navigation";
-import { headers } from "next/headers";
+import { headers, cookies } from "next/headers";
+import { MAINTENANCE_COOKIE, maintenanceEnabled, validMaintenancePass } from "../../../lib/maintenance";
 import { createAuthClient } from "../../../lib/supabase/auth-client";
 
 export async function signInWithGitHub() {
+  if (maintenanceEnabled() && !validMaintenancePass((await cookies()).get(MAINTENANCE_COOKIE)?.value)) redirect("/maintenance");
   const auth = await createAuthClient();
   if (!auth) redirect("/scouter/login?error=config");
   const requestHeaders = await headers();
@@ -18,6 +20,7 @@ export async function signInWithGitHub() {
 }
 
 export async function signOutScouter() {
+  (await cookies()).delete(MAINTENANCE_COOKIE);
   const auth = await createAuthClient();
   if (auth) await auth.auth.signOut();
   redirect("/scouter/login");

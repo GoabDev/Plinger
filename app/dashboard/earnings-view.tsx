@@ -2,10 +2,11 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, ArrowUpRight, BadgeDollarSign, Check, ChevronDown, Clock3, RefreshCw, Users, WalletCards, X } from "lucide-react";
+import { earningBalance } from "../../lib/referrals/rules";
 import { Fragment, useMemo, useState } from "react";
 import { adminEarningsQueryKey, getAdminEarnings, updateEarning } from "../../lib/scouter/admin-client";
 import type { AdminEarningClaim, EarningsActionInput } from "../../lib/scouter/contracts";
-import { formatNaira, formatNairaKobo, formatNairaRate, formatUsd, splitEarnings } from "../../lib/scouter/money";
+import { formatNaira, formatNairaKobo, formatNairaRate, formatUsd } from "../../lib/scouter/money";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "../ui/alert-dialog";
 
 export default function EarningsView({ totalScouters }: { totalScouters: number }) {
@@ -39,7 +40,7 @@ export default function EarningsView({ totalScouters }: { totalScouters: number 
   const scouters = useMemo(() => aggregateScouters(claims), [claims]);
   const paidScouters = scouters.filter((row) => row.confirmed > BigInt(0) && row.outstanding === BigInt(0)).length;
   const unpaidScouters = scouters.filter((row) => row.outstanding > BigInt(0)).length;
-  const paidKobo = claims.reduce((sum, claim) => sum + BigInt(claim.payout_amount_kobo ?? "0"), BigInt(0));
+  const paidKobo = claims.reduce((sum, claim) => sum + earningBalance(claim).paidKobo, BigInt(0));
   const busyId = mutation.isPending ? mutation.variables?.id : "";
 
   if (earningsQuery.isPending) return <div className="earnings-state" role="status"><RefreshCw size={18} className="spinning" /> Loading earnings</div>;
@@ -54,15 +55,15 @@ export default function EarningsView({ totalScouters }: { totalScouters: number 
     <div className="earnings-summary" aria-label="Earnings totals">
       <SummaryCard label="Scouters" value={String(totalScouters)} detail={`${scouters.length} with submissions`} icon={Users} />
       <SummaryCard label="Confirmed gross" value={formatUsd(totals.gross)} detail={`${formatNaira(totals.gross, rateMicros)} at ${formatNairaRate(rateMicros)}`} icon={BadgeDollarSign} />
-      <SummaryCard label="Scouter share" value={formatUsd(totals.scouter)} detail={`${formatNaira(totals.scouter, rateMicros)} \u00b7 60%`} icon={WalletCards} tone="green" />
-      <SummaryCard label="Plinger share" value={formatUsd(totals.admin)} detail={`${formatNaira(totals.admin, rateMicros)} \u00b7 40%`} icon={BadgeDollarSign} tone="purple" />
+      <SummaryCard label="Scouter share" value={formatUsd(totals.scouter)} detail={`${formatNaira(totals.scouter, rateMicros)}`} icon={WalletCards} tone="green" />
+      <SummaryCard label="Plinger share" value={formatUsd(totals.admin)} detail={`${formatNaira(totals.admin, rateMicros)}`} icon={BadgeDollarSign} tone="purple" />
       <SummaryCard label="Fully paid" value={String(paidScouters)} detail={`${formatNairaKobo(paidKobo)} recorded payouts`} icon={Check} tone="green" />
       <SummaryCard label="Awaiting payout" value={String(unpaidScouters)} detail="Confirmed balance outstanding" icon={Clock3} tone="amber" />
     </div>
 
     <section className="earnings-panel">
-      <div className="earnings-panel-heading"><div><p className="overline">60 / 40 SPLIT</p><h2>Scouter balances</h2></div><span>{scouters.length} earning scouter{scouters.length === 1 ? "" : "s"}</span></div>
-      {scouters.length ? <div className="earnings-table-wrap"><table className="earnings-table"><thead><tr><th scope="col">Scouter</th><th scope="col">Confirmed gross</th><th scope="col">Scouter 60%</th><th scope="col">Plinger 40%</th><th scope="col">Outstanding</th><th scope="col">Paid record</th><th scope="col">Status</th></tr></thead><tbody>{scouters.map((row) => <Fragment key={row.accountId}><tr className="scouter-balance-row" data-expanded={expandedScouters.has(row.accountId)} onClick={() => toggleScouter(row.accountId)}><td><button type="button" className="scouter-balance-toggle" aria-expanded={expandedScouters.has(row.accountId)} aria-controls={`scouter-submissions-${row.accountId}`} onClick={(event) => { event.stopPropagation(); toggleScouter(row.accountId); }}><ChevronDown size={16} aria-hidden="true" /><span><strong>{row.login}</strong><small>{row.claims} submission{row.claims === 1 ? "" : "s"}{row.pending > 0n ? ` \u00b7 ${formatUsd(row.pending)} pending` : ""}</small></span></button></td><td>{formatUsd(row.confirmed)}<small>{formatNaira(row.confirmed, rateMicros)}</small></td><td>{formatUsd(splitEarnings(row.confirmed).scouter)}<small>{formatNaira(splitEarnings(row.confirmed).scouter, rateMicros)}</small></td><td>{formatUsd(splitEarnings(row.confirmed).admin)}<small>{formatNaira(splitEarnings(row.confirmed).admin, rateMicros)}</small></td><td>{formatUsd(row.outstanding)}<small>{formatNaira(row.outstanding, rateMicros)}</small></td><td>{formatUsd(row.paidShare)}<small>{formatNairaKobo(row.paidKobo)} captured</small></td><td><span className={`badge ${row.confirmed === 0n ? "amber" : row.outstanding > 0n ? "red" : "green"}`}>{row.confirmed === 0n ? "Pending review" : row.outstanding > 0n ? "Payout due" : "Paid"}</span></td></tr><tr hidden={!expandedScouters.has(row.accountId)} className="scouter-submissions-row"><td colSpan={7}><section id={`scouter-submissions-${row.accountId}`} aria-label={`${row.login} submissions`} className="scouter-submissions"><h3>Submissions for {row.login}</h3><p>Individual withdrawals, review decisions, and recorded payouts.</p><div className="scouter-submission-list">{claims.filter((claim) => claim.account_id === row.accountId).map((claim) => <SubmissionDetail key={claim.id} claim={claim} login={row.login} />)}</div></section></td></tr></Fragment>)}</tbody></table></div> : <p className="earnings-empty">No earnings have been submitted yet.</p>}
+      <div className="earnings-panel-heading"><div><p className="overline">EARNINGS & REFERRAL BONUSES</p><h2>Scouter balances</h2></div><span>{scouters.length} earning scouter{scouters.length === 1 ? "" : "s"}</span></div>
+      {scouters.length ? <div className="earnings-table-wrap"><table className="earnings-table"><thead><tr><th scope="col">Scouter</th><th scope="col">Confirmed gross</th><th scope="col">Scouter share</th><th scope="col">Plinger share</th><th scope="col">Outstanding</th><th scope="col">Paid record</th><th scope="col">Status</th></tr></thead><tbody>{scouters.map((row) => <Fragment key={row.accountId}><tr className="scouter-balance-row" data-expanded={expandedScouters.has(row.accountId)} onClick={() => toggleScouter(row.accountId)}><td><button type="button" className="scouter-balance-toggle" aria-expanded={expandedScouters.has(row.accountId)} aria-controls={`scouter-submissions-${row.accountId}`} onClick={(event) => { event.stopPropagation(); toggleScouter(row.accountId); }}><ChevronDown size={16} aria-hidden="true" /><span><strong>{row.login}</strong>{row.bonus && <span className="badge purple">Wave 10 · +10%</span>}<small>{row.claims} submission{row.claims === 1 ? "" : "s"}{row.pending > 0n ? ` \u00b7 ${formatUsd(row.pending)} pending` : ""}</small></span></button></td><td>{formatUsd(row.confirmed)}<small>{formatNaira(row.confirmed, rateMicros)}</small></td><td>{formatUsd(row.share)}<small>{formatNaira(row.share, rateMicros)}</small></td><td>{formatUsd((row.confirmed - row.share))}<small>{formatNaira((row.confirmed - row.share), rateMicros)}</small></td><td>{formatUsd(row.outstanding)}<small>{formatNaira(row.outstanding, rateMicros)}</small></td><td>{formatUsd(row.paidShare)}<small>{formatNairaKobo(row.paidKobo)} captured</small></td><td><span className={`badge ${row.confirmed === 0n ? "amber" : row.outstanding > 0n ? "red" : "green"}`}>{row.confirmed === 0n ? "Pending review" : row.outstanding > 0n ? "Payout due" : "Paid"}</span></td></tr><tr hidden={!expandedScouters.has(row.accountId)} className="scouter-submissions-row"><td colSpan={7}><section id={`scouter-submissions-${row.accountId}`} aria-label={`${row.login} submissions`} className="scouter-submissions"><h3>Submissions for {row.login}</h3><p>Individual withdrawals, review decisions, and recorded payouts.</p><div className="scouter-submission-list">{claims.filter((claim) => claim.account_id === row.accountId).map((claim) => <SubmissionDetail key={claim.id} claim={claim} login={row.login} />)}</div></section></td></tr></Fragment>)}</tbody></table></div> : <p className="earnings-empty">No earnings have been submitted yet.</p>}
     </section>
 
     <section className="earnings-panel">
@@ -73,15 +74,15 @@ export default function EarningsView({ totalScouters }: { totalScouters: number 
 }
 
 function SubmissionDetail({ claim, login }: { claim: AdminEarningClaim; login: string }) {
-  const split = splitEarnings(claim.amount_stroops ?? "0");
-  const share = claim.payout_status === "paid" ? claim.payout_scouter_share_stroops ?? split.scouter : split.scouter;
+  const split = earningBalance(claim);
+  const share = split.scouter;
   return <article className="scouter-submission">
     <div className="scouter-submission-heading"><strong>{formatDate(claim.transaction_created_at ?? claim.created_at)}</strong><span className={`badge ${claim.status === "confirmed" ? "green" : claim.status === "rejected" ? "red" : "amber"}`}>{claim.status}</span></div>
     <dl>
       <div><dt>Withdrawal amount</dt><dd>{claim.amount_stroops ? formatUsd(split.gross) : "Not recorded"}</dd></div>
       <div><dt>Scouter share</dt><dd>{claim.amount_stroops ? formatUsd(share) : "Not recorded"}</dd></div>
-      <div><dt>Payout</dt><dd>{claim.payout_status === "paid" ? "Paid" : claim.status === "confirmed" ? "Payout due" : "Not approved"}</dd></div>
-      <div><dt>Recorded bank payment</dt><dd>{claim.payout_status === "paid" ? claim.payout_amount_kobo ? formatNairaKobo(claim.payout_amount_kobo) : "Historical amount unavailable" : "Not paid"}</dd></div>
+      <div><dt>Payout</dt><dd>{claim.status === "confirmed" ? split.due > 0n ? "Payout due" : "Paid" : "Not approved"}</dd></div>
+      {BigInt(claim.bonusPaidStroops ?? "0") > 0n && <div><dt>Recorded referral bonus</dt><dd>{formatUsd(claim.bonusPaidStroops!)} · {formatNairaKobo(claim.bonusPaidKobo ?? "0")}</dd></div>}<div><dt>Recorded bank payment</dt><dd>{claim.payout_status === "paid" ? claim.payout_amount_kobo ? formatNairaKobo(claim.payout_amount_kobo) : "Historical amount unavailable" : "Not paid"}</dd></div>
     </dl>
     {claim.payout_status === "paid" && (claim.paid_at || claim.payout_exchange_rate_micros) && <p>{claim.paid_at ? `Paid ${formatDate(claim.paid_at)}` : "Recorded payout"}{claim.payout_exchange_rate_micros ? ` at ${formatNairaRate(claim.payout_exchange_rate_micros)}` : ""}</p>}
     <div className="scouter-submission-links">{claim.transaction_hash && <a href={`https://stellar.expert/explorer/public/tx/${claim.transaction_hash}`} target="_blank" rel="noreferrer">View transaction <ArrowUpRight size={13} aria-hidden="true" /></a>}<a href={`/api/scouters/${encodeURIComponent(login)}/proofs/${claim.id}`} target="_blank" rel="noreferrer">View proof <ArrowUpRight size={13} aria-hidden="true" /></a></div>
@@ -93,21 +94,21 @@ function SummaryCard({ label, value, detail, icon: Icon, tone = "neutral" }: { l
 }
 
 function ClaimRow({ claim, rateMicros, busy, update }: { claim: AdminEarningClaim; rateMicros: string; busy: boolean; update: (input: EarningsActionInput) => void }) {
-  const split = splitEarnings(claim.amount_stroops ?? "0");
+  const split = earningBalance(claim);
   const login = claim.profile?.account_login ?? `GitHub ID ${claim.account_id}`;
   const [dialogOpen, setDialogOpen] = useState(false);
   const [pendingAction, setPendingAction] = useState<EarningsActionInput | null>(null);
-  const confirmation = pendingAction ? confirmationCopy(pendingAction, login, split.gross, split.scouter) : null;
+  const confirmation = pendingAction ? confirmationCopy(pendingAction, login, split.gross, pendingAction.action === "payout" && pendingAction.status === "paid" ? split.due : split.scouter) : null;
   return <article className="earning-claim">
     <div className="earning-claim-main"><span className="earning-avatar" aria-hidden="true"><span>{login.slice(0, 1).toUpperCase()}</span><img src={`https://avatars.githubusercontent.com/u/${claim.account_id}?s=68&v=4`} width={34} height={34} alt="" loading="lazy" onError={(event) => { event.currentTarget.hidden = true; }} /></span><div><strong>{login}</strong><span>Account name: {claim.profile?.bank_account_name || "Not added"}</span><span>{claim.profile?.bank_name ? `${claim.profile.bank_name} \u00b7 ${claim.profile.bank_account_number}` : "Bank details not added"}</span><span>{formatDate(claim.transaction_created_at ?? claim.created_at)} \u00b7 Ledger {claim.ledger ?? "\u2014"}</span></div></div>
-    <div className="earning-claim-money"><strong>{formatUsd(split.gross)}</strong><span>{formatUsd(split.scouter)} scouter \u00b7 {formatUsd(split.admin)} Plinger</span>{claim.payout_status === "paid" && <span>{claim.payout_amount_kobo && claim.payout_exchange_rate_micros ? `${formatNairaKobo(claim.payout_amount_kobo)} paid at ${formatNairaRate(claim.payout_exchange_rate_micros)}${claim.paid_at ? ` \u00b7 ${formatDate(claim.paid_at)}` : ""}` : "Paid before payout accounting was enabled"}</span>}<div className="earning-split" aria-label="60 percent scouter, 40 percent Plinger"><span /><span /></div></div>
+    <div className="earning-claim-money"><strong>{formatUsd(split.gross)}</strong><span>{formatUsd(split.scouter)} scouter \u00b7 {formatUsd(split.admin)} Plinger</span>{claim.payout_status === "paid" && <span>{claim.payout_amount_kobo && claim.payout_exchange_rate_micros ? `${formatNairaKobo(claim.payout_amount_kobo)} paid at ${formatNairaRate(claim.payout_exchange_rate_micros)}${claim.paid_at ? ` \u00b7 ${formatDate(claim.paid_at)}` : ""}` : "Paid before payout accounting was enabled"}</span>}{BigInt(claim.bonusPaidStroops ?? "0") > 0n && <p className="badge green">Bonus paid: {formatUsd(claim.bonusPaidStroops!)} · {formatNairaKobo(claim.bonusPaidKobo ?? "0")}</p>}<div className="earning-split" style={{ gridTemplateColumns: claim.wave10 && claim.referralEligible ? "7fr 3fr" : "3fr 2fr" }} aria-label={`${claim.wave10 && claim.referralEligible ? 70 : 60} percent scouter`}><span /><span /></div></div>
     <div className="earning-claim-links"><a href={`https://stellar.expert/explorer/public/tx/${claim.transaction_hash}`} target="_blank" rel="noreferrer">Stellar <ArrowUpRight size={13} aria-hidden="true" /></a><a href={`/api/scouters/${encodeURIComponent(login)}/proofs/${claim.id}`} target="_blank" rel="noreferrer">Proof <ArrowUpRight size={13} aria-hidden="true" /></a></div>
-    <div className="earning-claim-status"><span className={`badge ${claim.status === "confirmed" ? "green" : claim.status === "rejected" ? "red" : "amber"}`}>{claim.status}</span>{claim.status === "confirmed" && <span className={`badge ${claim.payout_status === "paid" ? "green" : "neutral"}`}>{claim.payout_status === "paid" ? "Paid" : "Payout due"}</span>}</div>
+    <div className="earning-claim-status">{claim.wave10 && <span className="badge purple">Wave 10{claim.referralEligible ? " · +10%" : ""}</span>}<span className={`badge ${claim.status === "confirmed" ? "green" : claim.status === "rejected" ? "red" : "amber"}`}>{claim.status}</span>{claim.status === "confirmed" && <span className={`badge ${claim.payout_status === "paid" ? "green" : "neutral"}`}>{split.due > 0n ? "Payout due" : "Paid"}</span>}</div>
     <AlertDialog open={dialogOpen} onOpenChange={(open) => { setDialogOpen(open); if (!open) setPendingAction(null); }}>
       <div className="earning-claim-actions" aria-label={`Actions for ${login}'s ${formatUsd(split.gross)} earning`}>
         {claim.status !== "confirmed" && <AlertDialogTrigger asChild><button type="button" className="button button-white" disabled={busy} onClick={() => setPendingAction({ action: "review", status: "confirmed" })}><Check size={14} aria-hidden="true" /> Confirm</button></AlertDialogTrigger>}
-        {claim.status !== "rejected" && <AlertDialogTrigger asChild><button type="button" className="button button-white" disabled={busy} onClick={() => setPendingAction({ action: "review", status: "rejected" })}><X size={14} aria-hidden="true" /> Reject</button></AlertDialogTrigger>}
-        {claim.status === "confirmed" && <AlertDialogTrigger asChild><button type="button" className="button button-black" disabled={busy} onClick={() => setPendingAction(claim.payout_status === "paid" ? { action: "payout", status: "unpaid" } : { action: "payout", status: "paid", rateMicros })}>{claim.payout_status === "paid" ? "Mark unpaid" : "Mark paid"}</button></AlertDialogTrigger>}
+        {claim.status !== "rejected" && !(claim.wave10 && claim.payout_status === "paid") && <AlertDialogTrigger asChild><button type="button" className="button button-white" disabled={busy} onClick={() => setPendingAction({ action: "review", status: "rejected" })}><X size={14} aria-hidden="true" /> Reject</button></AlertDialogTrigger>}
+        {claim.status === "confirmed" && !(claim.wave10 && split.due === 0n) && <AlertDialogTrigger asChild><button type="button" className="button button-black" disabled={busy} onClick={() => setPendingAction(split.due === 0n ? { action: "payout", status: "unpaid" } : { action: "payout", status: "paid", rateMicros, expectedStroops: split.due.toString() })}>{claim.wave10 && claim.payout_status === "paid" && split.due > 0n ? "Mark bonus paid" : split.due === 0n ? "Mark unpaid" : "Mark paid"}</button></AlertDialogTrigger>}
       </div>
       {confirmation && <AlertDialogContent>
         <AlertDialogHeader>
@@ -152,18 +153,19 @@ function confirmationCopy(action: EarningsActionInput, login: string, gross: big
 }
 
 function aggregateScouters(claims: AdminEarningClaim[]) {
-  const rows = new Map<number, { accountId: number; login: string; claims: number; confirmed: bigint; pending: bigint; outstanding: bigint; paidShare: bigint; paidKobo: bigint }>();
+  const rows = new Map<number, { accountId: number; login: string; claims: number; bonus: boolean; share: bigint; confirmed: bigint; pending: bigint; outstanding: bigint; paidShare: bigint; paidKobo: bigint }>();
   for (const claim of claims) {
-    const row = rows.get(claim.account_id) ?? { accountId: claim.account_id, login: claim.profile?.account_login ?? String(claim.account_id), claims: 0, confirmed: BigInt(0), pending: BigInt(0), outstanding: BigInt(0), paidShare: BigInt(0), paidKobo: BigInt(0) };
+    const row = rows.get(claim.account_id) ?? { accountId: claim.account_id, login: claim.profile?.account_login ?? String(claim.account_id), claims: 0, bonus: false, share: 0n, confirmed: BigInt(0), pending: BigInt(0), outstanding: BigInt(0), paidShare: BigInt(0), paidKobo: BigInt(0) };
     const amount = BigInt(claim.amount_stroops ?? "0");
     row.claims += 1;
+    row.bonus ||= Boolean(claim.wave10 && claim.referralEligible);
     if (claim.status === "confirmed") {
       row.confirmed += amount;
-      if (claim.payout_status !== "paid") row.outstanding += splitEarnings(amount).scouter;
-      else {
-        row.paidShare += BigInt(claim.payout_scouter_share_stroops ?? splitEarnings(amount).scouter);
-        row.paidKobo += BigInt(claim.payout_amount_kobo ?? "0");
-      }
+      const balance = earningBalance(claim);
+      row.share += balance.scouter;
+      row.outstanding += balance.due;
+      row.paidShare += balance.paid;
+      row.paidKobo += balance.paidKobo;
     } else if (claim.status === "pending") row.pending += amount;
     rows.set(claim.account_id, row);
   }
@@ -172,7 +174,8 @@ function aggregateScouters(claims: AdminEarningClaim[]) {
 
 function sumClaims(claims: AdminEarningClaim[]) {
   const gross = claims.reduce((sum, claim) => sum + BigInt(claim.amount_stroops ?? "0"), BigInt(0));
-  return splitEarnings(gross);
+  const scouter = claims.reduce((sum, claim) => sum + earningBalance(claim).scouter, 0n);
+  return { gross, scouter, admin: gross - scouter };
 }
 
 function formatDate(value: string) { return new Date(value).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" }); }

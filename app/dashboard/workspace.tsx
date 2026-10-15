@@ -45,6 +45,7 @@ import { githubSyncMutationKey, syncGitHub } from "../../lib/github/client";
 import type { ScouterRow } from "../../lib/dashboard/scouters";
 import ScoutersView from "./scouters-view";
 import EarningsView from "./earnings-view";
+import ReferralsView from "./referrals-view";
 import { Brand } from "../ui/brand";
 import { MonthPicker } from "../ui/month-picker";
 import { ThemeToggle } from "../ui/theme-toggle";
@@ -66,7 +67,8 @@ type View =
   | "pull-requests"
   | "merged"
   | "scouters"
-  | "earnings";
+  | "earnings"
+  | "referrals";
 type Props = {
   month: string;
   repositories: RepositoryRow[];
@@ -92,6 +94,7 @@ const navigation: { id: View; label: string; icon: LucideIcon }[] = [
   { id: "repositories", label: "Repositories", icon: BookOpen },
   { id: "scouters", label: "Scouters", icon: Users },
   { id: "earnings", label: "Earnings", icon: BadgeDollarSign },
+  { id: "referrals", label: "Referrals", icon: Users },
   { id: "issues", label: "Open issues", icon: CircleDot },
   { id: "closed-issues", label: "Closed issues", icon: Check },
   { id: "pull-requests", label: "Pull requests", icon: GitPullRequest },
@@ -102,7 +105,8 @@ const subtitles: Record<View, string> = {
   activity: "The latest updates from your connected repositories.",
   repositories: "Your recently updated repositories, together in one place.",
   scouters: "Personal GitHub accounts connected to Plinger and their work.",
-  earnings: "Verified withdrawals, the 60/40 split, and scouter payouts.",
+  earnings: "Verified withdrawals, referral bonuses, and scouter payouts.",
+  referrals: "Wave 10 referrals and confirmed participation.",
   issues: "Open work, assignments, and the details that matter.",
   "closed-issues": "Recently closed issues across your repositories.",
   "pull-requests":
@@ -512,6 +516,7 @@ export default function DashboardWorkspace({
             <ScoutersView scouters={scouters} total={scouterCount} unavailable={scoutersUnavailable} historyUnavailable={scouterHistoryUnavailable} refreshKey={fetchedAt} />
           )}
           {view === "earnings" && <EarningsView totalScouters={scouterCount} />}
+          {view === "referrals" && <ReferralsView />}
           {view !== "scouters" && view !== "earnings" && <div
             aria-busy={pending}
             className={view === "overview" ? "overview-grid" : "single-view"}

@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { ScouterProfile } from "../dashboard/scouters";
+import type { ReferralEarning } from "../referrals/rules";
 
 export const githubPatSchema = z.object({
   kind: z.literal("pat"),
@@ -21,7 +22,7 @@ export const scouterUpdateSchema = z.discriminatedUnion("kind", [githubPatSchema
 export const proofReviewSchema = z.object({ status: z.enum(["confirmed", "rejected", "pending"]) });
 export const earningsActionSchema = z.union([
   z.object({ action: z.literal("review"), status: z.enum(["confirmed", "rejected", "pending"]) }),
-  z.object({ action: z.literal("payout"), status: z.literal("paid"), rateMicros: z.string().regex(/^\d+$/, "Invalid payout rate") }),
+  z.object({ action: z.literal("payout"), status: z.literal("paid"), rateMicros: z.string().regex(/^\d+$/, "Invalid payout rate"), expectedStroops: z.string().regex(/^\d+$/).optional() }),
   z.object({ action: z.literal("payout"), status: z.literal("unpaid") }),
 ]);
 
@@ -49,7 +50,7 @@ export type ScouterPrivateState = {
   bankUpdatedAt: string | null;
 };
 
-export type WithdrawalProofSummary = {
+export type WithdrawalProofSummary = Partial<Pick<ReferralEarning, "wave10" | "referralEligible" | "bonusPaidStroops" | "bonusPaidKobo">> & {
   id: string;
   filename: string;
   status: string;

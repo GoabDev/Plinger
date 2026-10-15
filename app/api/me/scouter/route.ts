@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { withReferralEarnings } from "../../../../lib/referrals/server";
 import { currentScouter, encryptPat, PatEncryptionConfigurationError, readPrivateProfile, readProofs, safeProfile, sameOrigin, serviceClient } from "../../../../lib/scouter/portal";
 import { getScouterProfile } from "../../../../lib/dashboard/scouters";
 import { scouterUpdateSchema } from "../../../../lib/scouter/contracts";
@@ -18,7 +19,7 @@ export async function GET() {
       readProofs(current.scouter.account_id),
       getUsdNgnRate(),
     ]);
-    return NextResponse.json({ work, profile: safeProfile(privateProfile), proofs: proofs.map(publicProof), exchangeRate }, { headers: { "Cache-Control": "private, no-store" } });
+    return NextResponse.json({ work, profile: safeProfile(privateProfile), proofs: (await withReferralEarnings(proofs)).map(publicProof), exchangeRate }, { headers: { "Cache-Control": "private, no-store" } });
   } catch (error) {
     console.error("[scouter:self:failed]", error);
     return NextResponse.json({ error: "Scouter data is unavailable" }, { status: 503 });

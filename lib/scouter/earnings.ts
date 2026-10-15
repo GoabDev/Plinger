@@ -1,4 +1,5 @@
 import "server-only";
+import { withReferralEarnings } from "../referrals/server";
 import { serviceClient, WITHDRAWAL_ADDRESS, type WithdrawalProof } from "./portal";
 
 export const USDC_ISSUER = "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN";
@@ -100,14 +101,14 @@ export async function readAllEarnings() {
   if (claimsError) throw claimsError;
   if (profilesError) throw profilesError;
   const byAccount = new Map((profiles ?? []).map((profile) => [String(profile.account_id), profile]));
-  return (claims ?? []).map((claim) => ({
+  return withReferralEarnings((claims ?? []).map((claim) => ({
     ...claim,
     amount_stroops: String(claim.amount_stroops),
     payout_scouter_share_stroops: claim.payout_scouter_share_stroops === null ? null : String(claim.payout_scouter_share_stroops),
     payout_exchange_rate_micros: claim.payout_exchange_rate_micros === null ? null : String(claim.payout_exchange_rate_micros),
     payout_amount_kobo: claim.payout_amount_kobo === null ? null : String(claim.payout_amount_kobo),
     profile: byAccount.get(String(claim.account_id)) ?? null,
-  }));
+  })));
 }
 
 function parseStellarAmount(amount: string) {
