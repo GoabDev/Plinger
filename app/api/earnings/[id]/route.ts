@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { referralsEnabled } from "../../../../lib/referrals/server";
 import { earningsActionSchema } from "../../../../lib/scouter/contracts";
 import { sameOrigin, serviceClient } from "../../../../lib/scouter/portal";
 import { createAuthClient } from "../../../../lib/supabase/auth-client";
@@ -28,6 +29,19 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
 
     const now = new Date().toISOString();
     const input = parsed.data;
+    if (referralsEnabled() && input.action === "payout") {
+      const wave = await client.from("wave10_proofs").select("proof_id").eq("proof_id", id).maybeSingle();
+      if (wave.error) throw wave.error;
+      if (wave.data) {
+        if (input.status !== "paid") return NextResponse.json({ error: "Recorded Wave 10 payments cannot be cleared" }, { status: 409 });
+        const rate = await getUsdNgnRate();
+        if (rate.rateMicros !== input.rateMicros || !input.expectedStroops)
+          return NextResponse.json({ error: "Refresh earnings and confirm the current payout amount and rate" }, { status: 409 });
+        const result = await client.rpc("wave10_record_payout", { p_id: id, p_actor: data.user!.id, p_expected: input.expectedStroops, p_rate: rate });
+        if (result.error) return NextResponse.json({ error: result.error.code === "P0001" ? result.error.message : "Could not record payout" }, { status: 409 });
+        return NextResponse.json({ ok: true }, { headers: { "Cache-Control": "private, no-store" } });
+      }
+    }
     const emptySnapshot = {
       payout_scouter_share_stroops: null,
       payout_exchange_rate_micros: null,
@@ -50,6 +64,9 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
         return NextResponse.json({ error: "The exchange rate changed. Refresh earnings and confirm the payout again." }, { status: 409 });
       }
       const scouterShare = splitEarnings(String(claim.amount_stroops)).scouter;
+      if (input.expectedStroops && input.expectedStroops !== scouterShare.toString()) {
+        return NextResponse.json({ error: "The payout amount changed. Refresh and confirm again." }, { status: 409 });
+      }
       row = {
         payout_status: "paid",
         paid_at: now,
