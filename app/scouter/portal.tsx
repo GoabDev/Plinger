@@ -16,14 +16,14 @@ import { DocumentUpload } from "../ui/document-upload";
 import { formatNaira, formatNairaKobo, formatNairaRate, formatUsd } from "../../lib/scouter/money";
 const WITHDRAWAL_ADDRESS = "GAZB64YEKBGODTQA2FTPYS5Y2IOZ75EEQSDMDIWWMP2X3YI4YIVWOFDY";
 
-export default function ScouterPortal() {
+export default function ScouterPortal({ initialView = "overview" }: { initialView?: ScouterView }) {
   const queryClient = useQueryClient();
   const portalQuery = useQuery({ queryKey: scouterPortalQueryKey, queryFn: getScouterPortal, gcTime: 0 });
   const data = portalQuery.data;
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const [copied, setCopied] = useState(false);
-  const [view, setView] = useState<ScouterView>("overview");
+  const [view, setView] = useState<ScouterView>(initialView);
   const [query, setQuery] = useState("");
   const [workStatus, setWorkStatus] = useState("all");
   const [workTab, setWorkTab] = useState<"issues" | "pull-requests">("issues");
@@ -73,11 +73,15 @@ export default function ScouterPortal() {
   const refreshing = portalQuery.isFetching;
 
   useEffect(() => {
-    const sync = () => { const id = window.location.hash.slice(1); setView(scouterViews.some((item) => item.id === id) ? id as ScouterView : "overview"); };
+    const sync = () => { if (initialView === "referrals") { setView("referrals"); return; } const id = window.location.hash.slice(1); setView(scouterViews.some((item) => item.id === id) ? id as ScouterView : "overview"); };
     sync(); window.addEventListener("hashchange", sync);
     return () => window.removeEventListener("hashchange", sync);
-  }, []);
-  function navigate(next: ScouterView) { setView(next); window.location.hash = next; }
+  }, [initialView]);
+  function navigate(next: ScouterView) {
+    if (next === "referrals") { window.location.assign("/scouter/referrals"); return; }
+    if (initialView === "referrals") { window.location.assign(`/scouter#${next}`); return; }
+    setView(next); window.location.hash = next;
+  }
 
   useEffect(() => {
     if (!data) return;
@@ -132,8 +136,8 @@ export default function ScouterPortal() {
     <div className="page-heading"><div><p className="overline">SCOUTER WORKSPACE</p><h1>{title}</h1></div><div className="heading-actions"><button type="button" className="button button-white" onClick={refresh} disabled={refreshing || Boolean(busy)}><RefreshCw size={15} className={refreshing ? "spinning" : ""} /> Refresh</button><a href={`https://github.com/${login}`} target="_blank" rel="noreferrer" className="button button-black"><img src="/github-mark-white.svg" width={16} height={16} alt="" /> GitHub <ArrowUpRight size={14} /></a></div></div>
     {(error || message) && <p className={`scouter-notice ${error ? "error" : ""}`} role={error ? "alert" : "status"}>{error || message}</p>}
 
+    {view === "referrals" && <ReferralPanel />}
     {view === "overview" && <>
-      <ReferralPanel />
       <div className="metrics scouter-overview-metrics">{[
         { label: "Open issues", count: work.openIssues.count, icon: CircleDot, tone: "green" },
         { label: "Open pull requests", count: work.openPullRequests.count, icon: GitPullRequest, tone: "blue" },

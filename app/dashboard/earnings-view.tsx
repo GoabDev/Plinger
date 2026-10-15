@@ -3,6 +3,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, ArrowUpRight, BadgeDollarSign, Check, ChevronDown, Clock3, RefreshCw, Users, WalletCards, X } from "lucide-react";
 import { earningBalance } from "../../lib/referrals/rules";
+import ReferralProofAction from "./referral-proof-action";
 import { Fragment, useMemo, useState } from "react";
 import { adminEarningsQueryKey, getAdminEarnings, updateEarning } from "../../lib/scouter/admin-client";
 import type { AdminEarningClaim, EarningsActionInput } from "../../lib/scouter/contracts";
@@ -106,6 +107,7 @@ function ClaimRow({ claim, rateMicros, busy, update }: { claim: AdminEarningClai
     <div className="earning-claim-status">{claim.wave10 && <span className="badge purple">Wave 10{claim.referralEligible ? " · +10%" : ""}</span>}<span className={`badge ${claim.status === "confirmed" ? "green" : claim.status === "rejected" ? "red" : "amber"}`}>{claim.status}</span>{claim.status === "confirmed" && <span className={`badge ${claim.payout_status === "paid" ? "green" : "neutral"}`}>{split.due > 0n ? "Payout due" : "Paid"}</span>}</div>
     <AlertDialog open={dialogOpen} onOpenChange={(open) => { setDialogOpen(open); if (!open) setPendingAction(null); }}>
       <div className="earning-claim-actions" aria-label={`Actions for ${login}'s ${formatUsd(split.gross)} earning`}>
+        <ReferralProofAction claim={claim} busy={busy} />
         {claim.status !== "confirmed" && <AlertDialogTrigger asChild><button type="button" className="button button-white" disabled={busy} onClick={() => setPendingAction({ action: "review", status: "confirmed" })}><Check size={14} aria-hidden="true" /> Confirm</button></AlertDialogTrigger>}
         {claim.status !== "rejected" && !(claim.wave10 && claim.payout_status === "paid") && <AlertDialogTrigger asChild><button type="button" className="button button-white" disabled={busy} onClick={() => setPendingAction({ action: "review", status: "rejected" })}><X size={14} aria-hidden="true" /> Reject</button></AlertDialogTrigger>}
         {claim.status === "confirmed" && !(claim.wave10 && split.due === 0n) && <AlertDialogTrigger asChild><button type="button" className="button button-black" disabled={busy} onClick={() => setPendingAction(split.due === 0n ? { action: "payout", status: "unpaid" } : { action: "payout", status: "paid", rateMicros, expectedStroops: split.due.toString() })}>{claim.wave10 && claim.payout_status === "paid" && split.due > 0n ? "Mark bonus paid" : split.due === 0n ? "Mark unpaid" : "Mark paid"}</button></AlertDialogTrigger>}
