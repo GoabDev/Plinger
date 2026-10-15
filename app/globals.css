@@ -2430,6 +2430,25 @@ ul {
 .earnings-table td strong, .earnings-table td small { display: block; }
 .earnings-table td strong { font-weight: 650; }
 .earnings-table td small { margin-top: 4px; color: var(--muted); font-size: 10px; }
+.scouter-balance-row { cursor: pointer; }
+.scouter-balance-toggle { display: flex; align-items: center; gap: 10px; min-height: 40px; text-align: left; color: inherit; background: transparent; border: 0; cursor: pointer; }
+.scouter-balance-toggle svg { flex-shrink: 0; transition: transform 180ms ease; }
+.scouter-balance-toggle[aria-expanded="true"] svg { transform: rotate(180deg); }
+.scouter-balance-toggle:focus-visible { outline: 2px solid var(--purple); outline-offset: 4px; border-radius: 3px; }
+.earnings-table .scouter-submissions-row > td { padding: 0; }
+.scouter-submissions { padding: 20px 24px; background: color-mix(in srgb, var(--purple) 4%, var(--canvas)); border-left: 3px solid var(--purple); }
+.scouter-submissions h3 { font-size: 14px; font-weight: 650; }
+.scouter-submissions > p { margin: 5px 0 16px; font-size: 12px; color: var(--muted); }
+.scouter-submission-list { display: grid; gap: 12px; }
+.scouter-submission { padding: 16px; border: 1px solid var(--line); border-radius: 8px; background: var(--canvas); }
+.scouter-submission-heading { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
+.scouter-submission dl { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; }
+.scouter-submission dt, .scouter-submission > p { font-size: 11px; color: var(--muted); }
+.scouter-submission dd { margin-top: 5px; font-size: 13px; font-weight: 600; }
+.scouter-submission > p { margin-top: 12px; }
+.scouter-submission-links { display: flex; gap: 18px; margin-top: 14px; }
+.scouter-submission-links a { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; color: var(--purple); }
+@media (prefers-reduced-motion: reduce) { .scouter-balance-toggle svg { transition: none; } }
 .earnings-empty, .earnings-state { padding: 42px 22px; color: var(--muted); text-align: center; font-size: 13px; }
 .earnings-state { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 10px; }
 .earnings-state strong, .earnings-state span { width: 100%; }
