@@ -1,0 +1,14 @@
+.shell { min-height: 100svh; display: flex; flex-direction: column; background: var(--canvas); color: var(--ink); padding: 32px; }
+.header { display: flex; align-items: center; }
+.header :global(.brand) { color: var(--ink); }
+.content { margin: auto; padding: 64px 0; max-width: 600px; text-align: center; }
+.icon { display: inline-flex; padding: 20px; background: color-mix(in srgb, var(--purple) 12%, transparent); color: var(--purple); border-radius: 22px; margin-bottom: 28px; }
+.eyebrow { color: var(--purple); font-size: 11px; letter-spacing: .13em; font-weight: 650; margin-bottom: 16px; }
+.content h1 { font-size: clamp(32px, 5vw, 48px); font-weight: 700; letter-spacing: -.04em; line-height: 1.15; }
+.description { color: var(--muted); font-size: 16px; line-height: 1.8; margin: 24px 0 28px; }
+.actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 12px; }
+.status { display: inline-flex; align-items: center; gap: 8px; color: var(--muted); font-size: 12px; margin-top: 30px; }
+.status > span { width: 6px; height: 6px; background: var(--purple); border-radius: 50%; }
+.developer { align-self: flex-end; display: inline-flex; align-items: center; gap: 8px; font-size: 12px; color: var(--muted); padding: 10px 0; }
+.developer:hover { color: var(--purple); }
+@media(max-width: 480px) { .shell { padding: 24px; } .content { padding: 48px 0; } .actions { flex-direction: column; } .description { font-size: 15px; } }

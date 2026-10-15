@@ -1,6 +1,8 @@
 "use server";
 
 import { redirect } from "next/navigation";
+import { cookies } from "next/headers";
+import { createMaintenancePass, MAINTENANCE_COOKIE, MAINTENANCE_PASS_SECONDS, maintenanceEnabled } from "../../lib/maintenance";
 import { createAuthClient } from "../../lib/supabase/auth-client";
 import { isAdmin } from "../../lib/supabase/auth-config";
 import { adminSignInSchema } from "../../lib/auth/contracts";
@@ -37,10 +39,21 @@ export async function signIn(
     return { error: "Invalid credentials.", fieldErrors: {} };
   }
 
+  if (maintenanceEnabled()) {
+    try {
+      (await cookies()).set(MAINTENANCE_COOKIE, createMaintenancePass(), {
+        httpOnly: true, secure: process.env.NODE_ENV === "production", sameSite: "lax", path: "/", maxAge: MAINTENANCE_PASS_SECONDS,
+      });
+    } catch {
+      return { error: "Developer access is not configured. Check the server configuration.", fieldErrors: {} };
+    }
+    redirect("/maintenance/access");
+  }
   redirect("/dashboard");
 }
 
 export async function signOut() {
+  (await cookies()).delete(MAINTENANCE_COOKIE);
   const supabase = await createAuthClient();
   if (supabase) await supabase.auth.signOut();
   redirect("/login");
