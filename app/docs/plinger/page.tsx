@@ -1,3 +1,4 @@
+import { SupportLinks } from "../../ui/support-links";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowLeft, ArrowRight, CircleDot, GitPullRequest, Network, Wallet } from "lucide-react";
@@ -41,7 +42,7 @@ export default function PlingerDocsPage() {
         <aside className={styles.note}><strong>Less chasing updates. A clearer view of the work.</strong><p>With these details together, the team can follow a scouter’s issue from assignment through development and keep track of the related earnings.</p></aside>
         <Link className={styles.resource} href="/docs"><span><small>Previous</small><strong>What is Drips Wave?</strong></span><ArrowLeft size={20} aria-hidden="true" /></Link>
         <Link className={styles.resource} href="/docs/getting-started/github-account"><span><small>Next</small><strong>Create a GitHub account</strong></span><ArrowRight size={20} aria-hidden="true" /></Link>
-        <footer className={styles.footer}>Plinger guide <span>Made for scouters, one step at a time.</span></footer>
+        <footer className={styles.footer}>Plinger guide<SupportLinks /></footer>
       </main>
       <nav className={styles.contents} aria-label="On this page"><p>On this page</p><a href="#what-is-plinger">What is Plinger?</a><a href="#how-everyone-connects">How everyone connects</a><a href="#what-plinger-tracks">What Plinger tracks</a></nav>
     </>

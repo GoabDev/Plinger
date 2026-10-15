@@ -10,7 +10,7 @@ vi.mock("../scouter/portal", () => ({ githubAccountId: mocks.account, serviceCli
 const code = "00000000-0000-4000-8000-000000000001";
 beforeEach(() => {
   vi.useFakeTimers(); vi.setSystemTime(new Date("2026-10-15T12:00:00Z"));
-  vi.stubEnv("PLINGER_WAVE10_REFERRALS", "true"); vi.stubEnv("SUPABASE_SECRET_KEY", "test-secret");
+  vi.stubEnv("PLINGER_REFERRALS", "true"); vi.stubEnv("SUPABASE_SECRET_KEY", "test-secret");
   vi.clearAllMocks(); mocks.account.mockReturnValue(2);
   mocks.lookup.mockResolvedValue({ data: { account_id: 1 }, error: null });
   mocks.upsert.mockResolvedValue({ error: null });
@@ -18,6 +18,12 @@ beforeEach(() => {
 afterEach(() => { vi.useRealTimers(); vi.unstubAllEnvs(); });
 const user = (created: string) => ({ id: "user", created_at: created }) as User;
 describe("referral signup capture", () => {
+  it("does not capture referrals when the general feature flag is disabled", async () => {
+    vi.stubEnv("PLINGER_REFERRALS", "false");
+    await captureReferral(user("2026-10-15T12:00:00Z"), referralCookie(code));
+    expect(mocks.lookup).not.toHaveBeenCalled();
+    expect(mocks.upsert).not.toHaveBeenCalled();
+  });
   it("rejects tampered attribution cookies", () => {
     const cookie = referralCookie(code);
     expect(parseReferralCookie(cookie)?.code).toBe(code);

@@ -1,3 +1,4 @@
+import { SupportLinks } from "./ui/support-links";
 import Link from "next/link";
 import {
   ArrowDown,
@@ -201,7 +202,7 @@ export default function Home() {
         <Link href="/scouter/login">
           Let&apos;s see what&apos;s happening <ArrowRight size={16} />
         </Link>
-      </footer>
+      <SupportLinks /></footer>
     </main>
   );
 }

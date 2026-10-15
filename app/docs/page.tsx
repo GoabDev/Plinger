@@ -1,3 +1,4 @@
+import { SupportLinks } from "../ui/support-links";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowUpRight, Check, CircleDot, Gift, Waves } from "lucide-react";
@@ -41,7 +42,7 @@ export default function DocsPage() {
           <a className={styles.resource} href="https://docs.drips.network/wave/" target="_blank" rel="noreferrer"><span><strong>Explore Drips Wave</strong><small>Official overview, rules, and contributor guides</small></span><ArrowUpRight size={20} aria-hidden="true" /><span className="sr-only"> (opens in a new tab)</span></a>
         </section>
         <Link className={styles.resource} href="/docs/plinger"><span><small>Next</small><strong>What is Plinger?</strong></span><ArrowUpRight size={20} aria-hidden="true" /></Link>
-        <footer className={styles.footer}>Plinger guide <span>Made for scouters, one step at a time.</span></footer>
+        <footer className={styles.footer}>Plinger guide<SupportLinks /></footer>
       </main>
       <nav className={styles.contents} aria-label="On this page"><p>On this page</p><a href="#what-is-drips-wave">What is Drips Wave?</a><a href="#how-it-works">How a Wave works</a><a href="#learn-more">Go a little deeper</a></nav>
     </>

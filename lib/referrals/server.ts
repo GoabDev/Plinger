@@ -5,7 +5,7 @@ import { githubAccountId, serviceClient } from "../scouter/portal";
 import { referralsOpen } from "./rules";
 
 export const REFERRAL_COOKIE = "plinger-wave10-referral";
-export const referralsEnabled = () => process.env.PLINGER_WAVE10_REFERRALS === "true";
+export const referralsEnabled = () => process.env.PLINGER_REFERRALS === "true";
 export async function referralCode(accountId: number) {
   const client = serviceClient();
   const { error } = await client.from("wave10_referral_codes").upsert({ account_id: accountId }, { onConflict: "account_id", ignoreDuplicates: true });

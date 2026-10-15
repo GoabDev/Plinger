@@ -1,3 +1,4 @@
+import { SupportLinks } from "../../../ui/support-links";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowLeft, ArrowRight, Waves } from "lucide-react";
@@ -75,7 +76,7 @@ export default function DripsWaveAccountPage() {
         </section>
         <Link className={styles.resource} href="/docs/getting-started/github-account"><span><small>Previous</small><strong>Create a GitHub account</strong></span><ArrowLeft size={20} aria-hidden="true" /></Link>
         <Link className={styles.resource} href="/docs/getting-started/github-pat"><span><small>Next</small><strong>Create your GitHub PAT</strong></span><ArrowRight size={20} aria-hidden="true" /></Link>
-        <footer className={styles.footer}>Plinger guide <span>Made for scouters, one step at a time.</span></footer>
+        <footer className={styles.footer}>Plinger guide<SupportLinks /></footer>
       </main>
       <nav className={styles.contents} aria-label="On this page"><p>On this page</p><a href="#sign-in">Sign in with GitHub</a><a href="#prepare-your-documents">Prepare your documents</a><a href="#complete-verification">Complete verification</a><a href="#verification-help">Verification help</a><a href="#watch-the-guide">Watch the guide</a><a href="#after-verification">Once you’re verified</a></nav>
     </>

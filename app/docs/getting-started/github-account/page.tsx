@@ -1,3 +1,4 @@
+import { SupportLinks } from "../../../ui/support-links";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowLeft, ArrowUpRight, UserPlus } from "lucide-react";
@@ -66,7 +67,7 @@ export default function GitHubAccountPage() {
         </section>
         <Link className={styles.resource} href="/docs/plinger"><span><small>Previous</small><strong>What is Plinger?</strong></span><ArrowLeft size={20} aria-hidden="true" /></Link>
         <Link className={styles.resource} href="/docs/getting-started/drips-wave-account"><span><small>Next</small><strong>Create a Drips Wave account</strong></span><ArrowUpRight size={20} aria-hidden="true" /></Link>
-        <footer className={styles.footer}>Plinger guide <span>Made for scouters, one step at a time.</span></footer>
+        <footer className={styles.footer}>Plinger guide<SupportLinks /></footer>
       </main>
       <nav className={styles.contents} aria-label="On this page"><p>On this page</p><a href="#before-you-start">Before you start</a><a href="#create-your-account">Create your account</a><a href="#watch-the-walkthrough">Watch the walkthrough</a><a href="#email-help">Email help</a><a href="#youre-ready">You’re ready when…</a></nav>
     </>
