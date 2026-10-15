@@ -1,3 +1,4 @@
+import { SupportLinks } from "../../../ui/support-links";
 import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
@@ -84,7 +85,7 @@ export default function ApplyingForIssuesPage() {
         </section>
         <Link className={styles.resource} href="/docs/getting-started/plinger-account"><span><small>Previous</small><strong>Create your Plinger account</strong></span><ArrowLeft size={20} aria-hidden="true" /></Link>
         <Link className={styles.resource} href="/docs/withdrawals"><span><small>Next</small><strong>Withdraw your rewards</strong></span><ArrowUpRight size={20} aria-hidden="true" /></Link>
-        <footer className={styles.footer}>Plinger guide <span>Made for scouters, one step at a time.</span></footer>
+        <footer className={styles.footer}>Plinger guide<SupportLinks /></footer>
       </main>
       <nav className={styles.contents} aria-label="On this page"><p>On this page</p><a href="#watch-the-walkthrough">Watch the walkthrough</a><a href="#before-you-apply">Before you apply</a><a href="#find-an-issue">Find an issue</a><a href="#write-your-application">Write your application</a><a href="#ai-application-template">AI application template</a><a href="#application-limits">Application limits</a><a href="#after-applying">After you apply</a><a href="#need-help">If you can’t apply</a></nav>
     </>

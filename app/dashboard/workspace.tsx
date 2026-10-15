@@ -1,4 +1,6 @@
 "use client";
+import { SupportLinks } from "../ui/support-links";
+
 
 import { currentMonth } from "../../lib/activity-month";
 import { useEffect, useRef, useState, useTransition } from "react";
@@ -711,7 +713,7 @@ export default function DashboardWorkspace({
             >
               Connected through GitHub <ArrowUpRight size={13} />
             </a>
-          </footer>
+          <SupportLinks /></footer>
         </main>
       </div>
     </div>

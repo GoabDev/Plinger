@@ -1,3 +1,4 @@
+import { SupportLinks } from "../../../ui/support-links";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowLeft, ArrowUpRight, KeyRound } from "lucide-react";
@@ -63,7 +64,7 @@ export default function GitHubPatPage() {
           <Link className={styles.resource} href="/docs/getting-started/plinger-account"><span><small>Next</small><strong>Create your Plinger account</strong><small>Install the App, sign in, and save your details</small></span><ArrowUpRight size={20} aria-hidden="true" /></Link>
         </section>
         <Link className={styles.resource} href="/docs/getting-started/drips-wave-account"><span><small>Previous</small><strong>Create a Drips Wave account</strong></span><ArrowLeft size={20} aria-hidden="true" /></Link>
-        <footer className={styles.footer}>Plinger guide <span>Made for scouters, one step at a time.</span></footer>
+        <footer className={styles.footer}>Plinger guide<SupportLinks /></footer>
       </main>
       <nav className={styles.contents} aria-label="On this page"><p>On this page</p><a href="#what-is-a-pat">What is a PAT?</a><a href="#create-the-token">Generate your token</a><a href="#choose-scopes">Choose scopes</a><a href="#watch-the-guide">Watch the walkthrough</a><a href="#next-step">Ready to continue?</a></nav>
     </>

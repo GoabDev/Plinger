@@ -1,3 +1,4 @@
+import { SupportLinks } from "../../../ui/support-links";
 import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
@@ -83,7 +84,7 @@ export default function PlingerAccountPage() {
         </section>
         <Link className={styles.resource} href="/docs/getting-started/github-pat"><span><small>Previous</small><strong>Create your GitHub PAT</strong></span><ArrowLeft size={20} aria-hidden="true" /></Link>
         <Link className={styles.resource} href="/docs/working-on-issues/applying"><span><small>Next</small><strong>Apply for issues on Drips Wave</strong></span><ArrowUpRight size={20} aria-hidden="true" /></Link>
-        <footer className={styles.footer}>Plinger guide <span>Made for scouters, one step at a time.</span></footer>
+        <footer className={styles.footer}>Plinger guide<SupportLinks /></footer>
       </main>
       <nav className={styles.contents} aria-label="On this page"><p>On this page</p><a href="#before-you-start">Before you start</a><a href="#install-plinger">1. Install Plinger</a><a href="#sign-in">2. Sign in</a><a href="#save-your-pat">3. Save your PAT</a><a href="#save-bank-details">4. Bank details</a><a href="#check-your-setup">Check your setup</a></nav>
     </>
