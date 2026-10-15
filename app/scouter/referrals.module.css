@@ -1,13 +1,9 @@
 .layout { display: grid; gap: 20px; min-width: 0; }
-.card { padding: 24px; border: 1px solid var(--line); border-radius: 14px; background: var(--canvas); min-width: 0; }
+.card { padding: 22px; min-width: 0; }
 .card h2, .card h3 { font-weight: 650; margin: 0 0 12px; }
-.card h2 { font-size: 18px; }
+.card h2 { font-size: 17px; }
 .card p { font-size: 13px; line-height: 1.7; margin: 8px 0 16px; color: var(--muted, #99939f); }
 .heading { display: flex; flex-wrap: wrap; gap: 12px; justify-content: space-between; align-items: center; }
-.stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
-.stats > div { display: grid; gap: 10px; padding: 20px 24px; border: 1px solid var(--line); border-radius: 12px; }
-.stats span { font-size: 12px; color: var(--muted); }
-.stats strong { font-size: 28px; }
 .adminGrid { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 20px; align-items: start; }
 .form { display: grid; gap: 10px; }
 .form label { margin-top: 8px; font-size: 12px; font-weight: 600; }
@@ -20,14 +16,7 @@
 .search svg { position: absolute; left: 12px; top: 11px; color: var(--muted); }
 .search input { padding-left: 36px; }
 .tableWrap { position: relative; overflow-x: auto; }
-.layout :global([data-slot="button"][data-variant="default"]) { color: #fff; background: #8250df; }
-.layout :global([data-slot="button"][data-variant="outline"]) { color: var(--ink); background: var(--canvas); border-color: var(--line); }
-.table { width: 100%; border-collapse: collapse; text-align: left; }
-.table th { font-size: 11px; color: var(--muted); padding: 12px 10px; white-space: nowrap; font-weight: 500; }
-.table td { padding: 16px 10px; border-bottom: 1px solid var(--line); font-size: 13px; }
-.table tr:last-child td { border-bottom: 0; }
-.table strong, .table small { display: block; }
-.table small { color: var(--muted); font-size: 11px; margin-top: 5px; }
+.table { min-width: 500px; }
 .note { margin-top: 24px; padding-top: 20px; border-top: 1px solid var(--line); font-size: 12px; line-height: 1.7; color: var(--muted); }
 .note p { margin: 8px 0 0; font-size: 12px; }
 .empty { display: grid; text-align: center; padding: 40px 16px; gap: 8px; color: var(--muted); font-size: 13px; }
@@ -37,4 +26,4 @@
 .code code { overflow-wrap: anywhere; }
 .shareGrid { display: grid; grid-template-columns: 1.3fr 1fr; gap: 20px; }
 @media(max-width: 1050px) { .adminGrid { grid-template-columns: 1fr; } }
-@media(max-width: 640px) { .card { padding: 18px; } .stats { gap: 8px; } .stats > div { padding: 14px 12px; } .stats strong { font-size: 23px; } .link, .filters { flex-direction: column; } .shareGrid { grid-template-columns: 1fr; } .table { min-width: 500px; } }
+@media(max-width: 640px) { .card { padding: 18px; } .link, .filters { flex-direction: column; } .shareGrid { grid-template-columns: 1fr; } .table { min-width: 500px; } }
