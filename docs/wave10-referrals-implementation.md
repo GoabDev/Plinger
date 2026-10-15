@@ -24,7 +24,7 @@ Removing unpaid attribution/qualification is allowed. A qualification supporting
 
 ## Deployment
 
-Apply `supabase/migrations/20261015194741_wave10_referrals_minimal.sql` before setting `PLINGER_WAVE10_REFERRALS=true` on the app server. The feature is disabled by default. No old migration or archived referral table is reused. There is no backfill of historical proofs.
+Apply `supabase/migrations/20261015194741_wave10_referrals_minimal.sql` before setting `PLINGER_REFERRALS=true` on the app server. The feature is disabled by default. No old migration or archived referral table is reused. There is no backfill of historical proofs.
 
 Keep the flag enabled once bonus payments exist: those records must continue to appear in balances after the referral window closes. Do not roll back to a build that ignores bonus payments. The signup window closes automatically; the accounting remains available.
 
