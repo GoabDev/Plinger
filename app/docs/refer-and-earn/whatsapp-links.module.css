@@ -1,0 +1,6 @@
+.referralSteps li a.inlineLink { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; padding: 3px 9px; margin: 2px 0; border: 1px solid color-mix(in srgb, #128c4d 35%, var(--line)); border-radius: 6px; background: color-mix(in srgb, #25d366 9%, var(--canvas)); color: #08783f; font-size: 13px; font-weight: 600; line-height: 1.6; text-decoration: none; vertical-align: baseline; transition: background 150ms ease, border-color 150ms ease; }
+.inlineLink svg { width: 15px; height: 15px; flex-shrink: 0; }
+.referralSteps li a.inlineLink:hover { background: color-mix(in srgb, #25d366 17%, var(--canvas)); border-color: #128c4d; }
+.inlineLink:focus-visible { outline: 2px solid #128c4d; outline-offset: 3px; }
+:global(.dark) .referralSteps li a.inlineLink { color: #7ee2a6; }
+@media (prefers-reduced-motion: reduce) { .referralSteps li a.inlineLink { transition: none; } }

@@ -86,6 +86,7 @@ export default function WithdrawalsPage() {
         </div>
       </section>
       <Link className={styles.resource} href="/docs/working-on-issues/applying"><span><small>Previous</small><strong>Applying for issues</strong></span><ArrowLeft size={20} aria-hidden="true" /></Link>
+      <Link className={styles.resource} href="/docs/refer-and-earn"><span><small>Next</small><strong>Refer and earn</strong></span><span aria-hidden="true">→</span></Link>
       <footer className={styles.footer}>Plinger guide <span>Withdrawal guidance checked 14 October 2026.</span></footer>
     </main>
     <nav className={styles.contents} aria-label="On this page"><p>On this page</p><a href="#watch-step-one">Watch the walkthrough</a><a href="#check-your-grant">Check your allocation</a><a href="#request-withdrawal">Request withdrawal</a><a href="#wait-for-completion">Wait for completion</a><a href="#submit-proof">Upload verification</a><a href="#after-submitting">Follow your payout</a><a href="#withdrawal-help">Get help</a></nav>

@@ -4,6 +4,11 @@ import { siteUrl } from "../lib/site";
 export default function sitemap(): MetadataRoute.Sitemap {
   return [
     {
+      url: new URL("/docs/refer-and-earn", siteUrl).toString(),
+      changeFrequency: "monthly",
+      priority: 0.8,
+    },
+    {
       url: new URL("/docs/withdrawals", siteUrl).toString(),
       changeFrequency: "monthly",
       priority: 0.8,

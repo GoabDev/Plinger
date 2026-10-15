@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { BookOpen, CircleDot, KeyRound, Network, UserPlus, Wallet, Waves } from "lucide-react";
+import { BookOpen, CircleDot, KeyRound, Network, UserPlus, Users, Wallet, Waves } from "lucide-react";
 import styles from "./docs.module.css";
 
 export function Topics() {
@@ -21,6 +21,7 @@ export function Topics() {
       <Link href="/docs/working-on-issues/applying" aria-current={pathname === "/docs/working-on-issues/applying" ? "page" : undefined}><CircleDot size={16} aria-hidden="true" /> Applying for issues</Link>
       <p className={styles.topicSection}>EARNINGS</p>
       <Link href="/docs/withdrawals" aria-current={pathname === "/docs/withdrawals" ? "page" : undefined}><Wallet size={16} aria-hidden="true" /> Withdraw your rewards</Link>
+      <Link href="/docs/refer-and-earn" aria-current={pathname === "/docs/refer-and-earn" ? "page" : undefined}><Users size={16} aria-hidden="true" /> Refer and earn</Link>
     </nav>
   );
 }
