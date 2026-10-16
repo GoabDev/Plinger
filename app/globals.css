@@ -2312,6 +2312,10 @@ ul {
 .scouter-page-heading { display: flex; justify-content: space-between; align-items: center; gap: 20px; padding-bottom: 25px; }
 .scouter-page-heading h1 { margin-top: 5px; font-size: 28px; overflow-wrap: anywhere; }
 .scouter-page-heading p:last-child { margin-top: 5px; color: var(--muted); }
+.scouter-sync-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding: 16px 24px; border-top: 1px solid var(--line); }
+.scouter-sync-toolbar p { flex: 1 1 240px; color: var(--muted); font-size: 12px; line-height: 1.6; }
+.scouter-sync-toolbar .scouter-sync-error { color: #b42318; }
+.dark .scouter-sync-toolbar .scouter-sync-error { color: #e19890; }
 .scouter-band { padding: 23px 0 27px; border-top: 1px solid var(--line); }
 .scouter-band-heading { display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 8px 20px; margin-bottom: 18px; }
 .scouter-band-heading h2, .scouter-admin-private h3 { display: flex; align-items: center; gap: 8px; font-size: 17px; font-weight: 650; }

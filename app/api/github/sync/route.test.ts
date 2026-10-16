@@ -110,4 +110,14 @@ describe("sync failure responses", () => {
     expect(response.status).toBe(400);
     expect(syncRecentScouterWorkBatch).not.toHaveBeenCalled();
   });
+  it("runs a targeted full sync for an admin's manual request", async () => {
+    const response = await POST(new Request("https://plinger.example/api/github/sync", {
+      method: "POST", headers: { "content-type": "application/json", "sec-fetch-site": "same-origin" },
+      body: JSON.stringify({ mode: "full", month: "all", scouterLogin: "dorky-1235" }),
+    }));
+    expect(response.status).toBe(200);
+    expect(syncRecentScouterWorkBatch).toHaveBeenCalledWith({ concurrency: 3, login: "dorky-1235" });
+    expect(syncScouterAssignmentsBatch).toHaveBeenCalledWith({ maxScouters: 1, maxPagesPerScouter: 5, concurrency: 2, login: "dorky-1235" });
+    expect(selectSupabaseRows).not.toHaveBeenCalled();
+  });
 });

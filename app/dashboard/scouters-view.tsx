@@ -21,6 +21,7 @@ import { prStatus } from "../../lib/dashboard/status";
 import { adminScouterQueryKey, getAdminScouter } from "../../lib/scouter/admin-client";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
 import ScouterAdminDetails from "./scouter-admin-details";
+import ScouterSync from "./scouter-sync";
 
 type ProfileTab = "issues" | "pull-requests" | "activity" | "repositories";
 type IssueFilter = "all" | "open" | "closed";
@@ -192,6 +193,7 @@ export default function ScoutersView({
               </a>
             </div>
 
+            <ScouterSync key={profile.scouter.account_login} login={profile.scouter.account_login} hasPat={profile.privateProfile.patUploaded} />
             <ScouterAdminDetails profile={profile} />
             <div className="scouter-metrics" aria-label="Scouter work totals">
               <Metric label="Open issues" value={profile.openIssues.count} icon={CircleDot} onClick={() => { setTab("issues"); setIssueFilter("open"); }} />
